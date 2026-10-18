@@ -1,0 +1,9 @@
+# 统一换行符：避免 gradlew（bash 脚本）在 Windows 上被转成 CRLF 后在 Linux/macOS 上跑不起来
+* text=auto eol=lf
+*.bat text eol=crlf
+gradlew text eol=lf
+
+# 二进制
+*.jar binary
+*.png binary
+*.zip binary

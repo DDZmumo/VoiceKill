@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VoiceKill 控制台</title>
+<style>
+  :root{
+    --bg:#0b0f14;--panel:#141a22;--panel-2:#1a212b;--line:#232c38;
+    --text:#e6edf3;--muted:#8b98a5;--accent:#3FBEEF;--accent-dim:#1f6e8c;
+    --danger:#ff5a5f;--ok:#3fd68a;--warn:#ffd479;--purple:#c8a2ff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 20% -10%,#16222e 0%,var(--bg) 55%);
+    color:var(--text);font:14px/1.55 "Microsoft YaHei","PingFang SC","Segoe UI",system-ui,sans-serif;min-height:100vh}
+  header{display:flex;align-items:center;gap:14px;padding:16px 24px;border-bottom:1px solid var(--line);
+    background:rgba(11,15,20,.75);backdrop-filter:blur(8px);position:sticky;top:0;z-index:10}
+  .logo{font-weight:700;font-size:16px;letter-spacing:.5px}
+  .logo b{color:var(--accent)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--danger);box-shadow:0 0 10px var(--danger)}
+  .dot.on{background:var(--ok);box-shadow:0 0 10px var(--ok)}
+  .muted{color:var(--muted)}.spacer{flex:1}
+  main{padding:20px 24px 60px;max-width:1280px;margin:0 auto}
+
+  .hero{display:grid;grid-template-columns:1fr auto;gap:20px;align-items:start;
+    background:linear-gradient(160deg,#182430,#121820);border:1px solid var(--line);
+    border-radius:16px;padding:22px 26px;margin-bottom:18px;position:relative;overflow:hidden}
+  .hero::after{content:"";position:absolute;inset:-40% -10% auto auto;width:340px;height:340px;
+    background:radial-gradient(circle,rgba(255,90,95,.14),transparent 65%);pointer-events:none}
+  .label{font-size:12px;color:var(--muted);letter-spacing:2px;text-transform:uppercase}
+
+  .words{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0 12px;position:relative;z-index:1}
+  .wchip{display:inline-flex;align-items:center;gap:8px;background:#1b232e;border:1px solid #2b3846;
+    border-radius:12px;padding:8px 12px;font-size:clamp(19px,3vw,27px);font-weight:800;color:#fff;
+    text-shadow:0 0 18px rgba(255,90,95,.35);cursor:pointer;transition:.15s}
+  .wchip:hover{border-color:var(--danger)}
+  .wchip .src{font-size:11px;font-weight:400;color:var(--muted);text-shadow:none}
+  .wchip .al{font-size:10px;font-weight:400;color:var(--accent);text-shadow:none;
+    border:1px solid var(--accent-dim);border-radius:6px;padding:0 5px}
+  .wchip .del{cursor:pointer;color:#5c6a78;font-size:15px;font-weight:400;padding-left:8px;border-left:1px solid #2b3846}
+  .wchip .del:hover{color:var(--danger)}
+  .wchip.flash{animation:flash .45s ease-out}
+  @keyframes flash{from{transform:scale(.93);opacity:.35}to{transform:scale(1);opacity:1}}
+
+  .timer{text-align:right;min-width:170px;position:relative;z-index:1}
+  .timer .num{font-size:38px;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums}
+  .timer .num small{font-size:14px;color:var(--muted);font-weight:400}
+  .bar{height:6px;border-radius:6px;background:#0d1319;overflow:hidden;margin-top:8px;border:1px solid var(--line)}
+  .bar > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),#7be0ff);transition:width .9s linear}
+
+  .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+  .card h2{margin:0 0 12px;font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .card h2 span.hint{font-weight:400;font-size:12px;color:var(--muted)}
+  .col-3{grid-column:span 3}.col-4{grid-column:span 4}.col-5{grid-column:span 5}
+  .col-6{grid-column:span 6}.col-7{grid-column:span 7}.col-8{grid-column:span 8}
+  @media (max-width:900px){
+    .col-3,.col-4,.col-5,.col-6,.col-7,.col-8{grid-column:span 12}
+    .hero{grid-template-columns:1fr;gap:14px}
+    .timer{text-align:left;min-width:0}
+    .timer .row{justify-content:flex-start !important}
+    .chips{max-height:180px}
+    button,.chip,.tab{min-height:34px}
+  }
+
+  input[type=text],select{width:100%;background:#0d1319;border:1px solid var(--line);border-radius:9px;
+    color:var(--text);padding:9px 12px;outline:none;font:inherit}
+  input:focus,select:focus{border-color:var(--accent-dim);box-shadow:0 0 0 3px rgba(63,190,239,.12)}
+  button{background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:9px;
+    padding:8px 14px;cursor:pointer;font:inherit;transition:.15s;white-space:nowrap;flex-shrink:0}
+  button:hover{border-color:var(--accent-dim);background:#1f2936}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#04222e;font-weight:700}
+  button.primary:hover{filter:brightness(1.08)}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .row > *{min-width:0}
+  .row > input[type=text]{flex:1 1 140px;width:auto}
+  .row > select{flex:1 1 140px;width:auto}
+
+  .chips{display:flex;flex-wrap:wrap;gap:8px;max-height:200px;overflow:auto}
+  .chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);
+    background:var(--panel-2);border-radius:9px;padding:6px 10px;cursor:pointer;transition:.15s;user-select:none}
+  .chip:hover{border-color:var(--accent-dim);background:#1f2936}
+  .chip .n{color:var(--accent);font-variant-numeric:tabular-nums;font-size:12px}
+  .chip .plus{color:var(--muted);border-left:1px solid var(--line);padding-left:6px;margin-left:2px}
+  .chip .plus:hover{color:var(--ok)}
+  .chip.active{border-color:var(--danger);box-shadow:0 0 0 2px rgba(255,90,95,.15) inset}
+  .chip.hot{border-color:#6b5426;color:var(--warn)}
+  .chip.name{border-color:#523b7a;color:var(--purple)}
+
+  .tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+  .tab{padding:5px 12px;border-radius:8px;cursor:pointer;color:var(--muted);font-size:13px}
+  .tab.on{background:var(--panel-2);color:var(--text);border:1px solid var(--line)}
+
+  .empty{color:var(--muted);font-size:13px;padding:10px 0}
+  .list{max-height:230px;overflow:auto;font-size:13px}
+  .list .item{display:flex;gap:10px;padding:7px 2px;border-bottom:1px dashed #1d2530;align-items:baseline}
+  .list .item:last-child{border-bottom:none}
+  .list .t{color:var(--muted);font-variant-numeric:tabular-nums;font-size:12px;flex-shrink:0}
+  .list .w{flex:1;color:#dfe8f1}
+  .list .rank{color:var(--warn);width:16px;flex-shrink:0}
+  .list .cnt{color:var(--danger);font-variant-numeric:tabular-nums}
+
+  .switch{display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none}
+  .switch input{appearance:none;width:42px;height:24px;background:#0d1319;border:1px solid var(--line);
+    border-radius:999px;position:relative;cursor:pointer;transition:.2s;flex-shrink:0}
+  .switch input:checked{background:var(--accent-dim);border-color:var(--accent)}
+  .switch input::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;
+    background:#8b98a5;transition:.2s}
+  .switch input:checked::after{left:20px;background:var(--accent)}
+
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  .kv{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin:10px 0 4px}
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:#101820;border:1px solid var(--accent-dim);color:var(--text);
+    padding:10px 18px;border-radius:10px;opacity:0;pointer-events:none;transition:.25s;z-index:99}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:#232c38;border-radius:8px}
+  ::-webkit-scrollbar-track{background:transparent}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Voice<b>Kill</b> 控制台</div>
+  <div class="row"><span class="dot" id="live"></span><span class="muted" id="liveText">连接中…</span></div>
+  <div class="spacer"></div>
+  <div class="muted" id="players">—</div>
+</header>
+
+<main>
+  <section class="hero">
+    <div>
+      <div class="label">本轮危险词 <span id="roundBadge" class="muted"></span></div>
+      <div class="words" id="currentWords"><div class="empty">等待数据…</div></div>
+      <div class="row" style="margin-top:4px">
+        <input type="text" id="addCurrentInput" placeholder="往本轮加一个词" style="max-width:200px"
+               onkeydown="if(event.key==='Enter')addCurrentWord()">
+        <button onclick="addCurrentWord()">加</button>
+        <span class="muted" style="font-size:12px" id="utterBadge">本周期 0 句</span>
+        <span class="muted" style="font-size:12px">点词看谐音 →</span>
+      </div>
+    </div>
+    <div class="timer">
+      <div class="num"><span id="remain">0</span><small>s</small></div>
+      <div class="bar"><i id="bar"></i></div>
+      <div class="row" style="margin-top:12px;justify-content:flex-end">
+        <button class="primary" id="startBtn" onclick="toggleRun()">开始</button>
+        <button onclick="act('/api/reroll')">立刻换一组</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="grid">
+    <section class="card col-7">
+      <h2>下一轮危险词 <span class="hint">空格或逗号隔开；留空 = 自动</span></h2>
+      <div class="row">
+        <input type="text" id="nextInput" placeholder="例如：小白 吃的 岩浆" maxlength="80">
+        <button class="primary" onclick="saveNext()">保存</button>
+        <button onclick="clearNext()">清除</button>
+      </div>
+      <div class="muted" id="nextHint" style="margin-top:10px;font-size:13px">—</div>
+      <div class="row" style="margin-top:14px">
+        <button onclick="applyStatsToNext()">用最热的几个词当下一轮</button>
+      </div>
+    </section>
+
+    <section class="card col-5">
+      <h2>选词设置</h2>
+      <label class="switch" style="margin-bottom:8px">
+        <input type="checkbox" id="smartToggle" onchange="saveConfig()">
+        <span>优先采用上一周期高频词</span>
+      </label>
+      <div class="kv"><span>智能概率</span><span id="chanceVal">70%</span></div>
+      <input type="range" id="chance" min="0" max="100" step="5"
+             oninput="document.getElementById('chanceVal').textContent=this.value+'%'" onchange="saveConfig()">
+      <div class="kv"><span>每轮几个词</span><span id="perRoundVal">5</span></div>
+      <input type="range" id="perRound" min="1" max="20" step="1"
+             oninput="document.getElementById('perRoundVal').textContent=this.value" onchange="saveConfig()">
+      <div class="kv"><span>其中「人名」</span><span id="namesVal">1</span></div>
+      <input type="range" id="names" min="0" max="4" step="1"
+             oninput="document.getElementById('namesVal').textContent=this.value" onchange="saveConfig()">
+      <div class="kv"><span>其中「我/你/他」这类</span><span id="highFreqVal">1</span></div>
+      <input type="range" id="highFreq" min="0" max="12" step="1"
+             oninput="document.getElementById('highFreqVal').textContent=this.value" onchange="saveConfig()">
+      <div class="kv"><span>轮换间隔</span><span id="intervalVal">30s</span></div>
+      <input type="range" id="interval" min="5" max="180" step="5"
+             oninput="document.getElementById('intervalVal').textContent=this.value+'s'" onchange="saveConfig()">
+    </section>
+
+    <section class="card col-4">
+      <h2>言多必失榜 <span class="hint">共 <span id="totalDeaths">0</span> 次</span></h2>
+      <div class="list" id="board"><div class="empty">还没有人死</div></div>
+      <div class="row" style="margin-top:10px"><button onclick="act('/api/board/reset')">清零</button></div>
+    </section>
+
+    <section class="card col-8">
+      <h2>本周期高频词 <span class="hint">点击 → 设为下一轮</span></h2>
+      <div class="chips" id="stats"><div class="empty">还没有人说话…</div></div>
+      <div class="row" style="margin-top:12px">
+        <input type="text" id="simInput" placeholder="模拟一句话（测试用）"
+               onkeydown="if(event.key==='Enter')simulate()">
+        <button onclick="simulate()">模拟</button>
+      </div>
+      <h2 style="margin-top:16px">上一周期高频词 <span class="hint">智能选词（权重 ×3）</span></h2>
+      <div class="chips" id="lastCycle"><div class="empty">上一周期没有数据</div></div>
+      <h2 style="margin-top:16px">整局累计高频词 <span class="hint">权重 ×1，越常说越容易出</span></h2>
+      <div class="chips" id="cumulative"><div class="empty">还没有累计数据</div></div>
+    </section>
+
+    <section class="card col-7">
+      <h2>词库 <span class="hint" id="poolCount"></span></h2>
+      <div class="tabs">
+        <div class="tab on" data-tab="custom">自定义</div>
+        <div class="tab" data-tab="names">人名</div>
+        <div class="tab" data-tab="slang">口语</div>
+        <div class="tab" data-tab="formal">正式</div>
+        <div class="tab" data-tab="highfreq">高频</div>
+      </div>
+      <div class="row" style="margin-bottom:12px">
+        <input type="text" id="poolSearch" placeholder="搜索…" oninput="poolSearchVal=this.value;renderPool()">
+        <input type="text" id="addInput" placeholder="新增词" maxlength="24"
+               onkeydown="if(event.key==='Enter')addWord()">
+        <button class="primary" onclick="addWord()">添加到当前分类</button>
+      </div>
+      <div class="chips" id="pool"></div>
+    </section>
+
+    <section class="card col-5">
+      <h2>谐音别名 <span class="hint">例：ad → 哎弟 / 阿德</span></h2>
+      <div class="row" style="margin-bottom:10px">
+        <input type="text" id="aliasWord" placeholder="原词（如 ad）" maxlength="16">
+        <input type="text" id="aliasValue" placeholder="谐音，逗号分隔" maxlength="40">
+        <button class="primary" onclick="addAlias()">添加</button>
+      </div>
+      <div class="chips" id="aliasList"><div class="empty">还没有配置别名</div></div>
+      <div class="muted" style="margin-top:12px;font-size:12px">
+        录音设备：按 <b>F8</b> 可以看当前系统有哪些设备。<br>
+        要换设备请到 Windows 设置 → 系统 → 声音 → 输入，改完重启游戏。
+      </div>
+    </section>
+
+    <section class="card col-12">
+      <h2>换词历史</h2>
+      <div class="list" id="history"><div class="empty">还没有记录</div></div>
+    </section>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let state = null;
+let tab = 'custom';
+let poolSearchVal = '';
+let lastSignature = null;
+
+const SRC = {smart:'智能', random:'随机', highfreq:'高频', manual:'手动', name:'人名'};
+const TAB_WORD = {custom:'customWords', names:'nameWords', slang:'slangWords',
+                  formal:'formalWords', highfreq:'highFreqWords'};
+
+async function act(path, body) {
+  try {
+    await fetch(path, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body || {})});
+  } catch (e) { toast('请求失败：' + e.message); }
+  poll();
+}
+
+async function poll() {
+  try {
+    const res = await fetch('/api/state', {cache:'no-store'});
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    state = await res.json();
+    $('live').classList.add('on');
+    $('liveText').textContent = '已连接';
+    render();
+  } catch (e) {
+    $('live').classList.remove('on');
+    $('liveText').textContent = '已断开（服务端没开？）';
+  }
+}
+
+function render() {
+  if (!state) return;
+  const btn = $('startBtn');
+  if (state.running) {
+    btn.textContent = '停止';
+    btn.classList.remove('primary');
+  } else {
+    btn.textContent = '开始';
+    btn.classList.add('primary');
+  }
+  renderWords();
+  renderBoard();
+
+  const remain = state.remainingSeconds || 0;
+  const total = state.intervalSeconds || 30;
+  $('remain').textContent = remain;
+  $('bar').style.width = Math.max(0, Math.min(100, ((total - remain) / total) * 100)) + '%';
+  $('utterBadge').textContent = '本周期 ' + (state.utterances || 0) + ' 句';
+  $('players').textContent = (state.playerNames && state.playerNames.length)
+      ? '在线：' + state.playerNames.join('、') : '无人在线';
+
+  if (document.activeElement.id !== 'nextInput') {
+    $('nextInput').value = (state.nextWords || []).join(' ');
+  }
+  $('nextHint').textContent = (state.nextWords && state.nextWords.length)
+      ? '已预定下一轮：' + state.nextWords.join(' / ')
+      : '未预定 —— 到点按「人名 + 智能 + 高频 + 随机」自动组一组';
+
+  $('smartToggle').checked = !!state.smartPick;
+  setRange('chance', state.smartPickChance, 'chanceVal', '%');
+  setRange('perRound', state.wordsPerRound, 'perRoundVal');
+  setRange('names', state.namesPerRound, 'namesVal');
+  setRange('highFreq', state.highFreqPerRound, 'highFreqVal');
+  setRange('interval', Math.min(180, total), 'intervalVal', 's');
+
+  renderChips('stats', state.stats, '还没有人说话…');
+  renderChips('lastCycle', state.lastCycle, '上一周期没有数据');
+  renderChips('cumulative', state.cumulative, '还没有累计数据');
+  renderPool();
+  renderHistory();
+  renderAliases();
+}
+
+function setRange(id, value, labelId, suffix) {
+  if (document.activeElement !== $(id)) $(id).value = value;
+  $(labelId).textContent = value + (suffix || '');
+}
+
+function renderWords() {
+  const words = state.currentWords || [];
+  const signature = words.map(w => w.word).join('|');
+  const changed = signature !== lastSignature;
+  const box = $('currentWords');
+  box.innerHTML = '';
+  if (!words.length) { box.innerHTML = '<div class="empty">本轮还没有词</div>'; return; }
+
+  words.forEach(slot => {
+    const aliases = (state.aliasesOf && state.aliasesOf[slot.word]) || [];
+    const chip = document.createElement('div');
+    chip.className = 'wchip' + (changed ? ' flash' : '');
+    chip.title = aliases.length ? ('念这些也算中：' + aliases.join(' / ')) : '点一下看/加谐音别名';
+
+    const name = document.createElement('span');
+    name.textContent = slot.word;
+    const src = document.createElement('span');
+    src.className = 'src';
+    src.textContent = SRC[slot.source] || slot.source;
+    chip.appendChild(name);
+    chip.appendChild(src);
+
+    if (aliases.length) {
+      const al = document.createElement('span');
+      al.className = 'al';
+      al.textContent = '+' + aliases.length;
+      chip.appendChild(al);
+    }
+    const del = document.createElement('span');
+    del.className = 'del';
+    del.textContent = '×';
+    del.title = '从本轮移除';
+    del.onclick = (ev) => { ev.stopPropagation(); act('/api/words/remove', {word: slot.word}); };
+    chip.appendChild(del);
+
+    chip.onclick = () => {
+      $('aliasWord').value = slot.word;
+      const input = $('aliasValue');
+      input.value = aliases.join(' ');
+      input.focus();
+      toast('为「' + slot.word + '」配置谐音');
+    };
+    box.appendChild(chip);
+  });
+  lastSignature = signature;
+  $('roundBadge').textContent = '（' + words.length + ' / ' + (state.wordsPerRound || 5) + '）';
+}
+
+function renderBoard() {
+  const list = state.board || [];
+  $('totalDeaths').textContent = state.totalDeaths || 0;
+  const box = $('board');
+  if (!list.length) { box.innerHTML = '<div class="empty">还没有人死</div>'; return; }
+  box.innerHTML = list.map((x, i) =>
+    '<div class="item"><span class="rank">' + (i + 1) + '</span>'
+    + '<span class="w">' + esc(x.name) + '</span>'
+    + '<span class="cnt">' + x.count + '</span></div>').join('');
+}
+
+function renderChips(targetId, list, emptyText) {
+  const box = $(targetId);
+  if (!list || !list.length) { box.innerHTML = '<div class="empty">' + emptyText + '</div>'; return; }
+  const inRound = new Set((state.currentWords || []).map(w => w.word));
+  box.innerHTML = '';
+  list.forEach(item => {
+    const chip = document.createElement('div');
+    chip.className = 'chip' + (inRound.has(item.word) ? ' active' : '');
+    chip.innerHTML = '<span>' + esc(item.word) + '</span><span class="n">' + item.count + '</span>';
+    chip.onclick = (ev) => {
+      if (ev.target.classList.contains('plus')) return;
+      act('/api/set-next', {words: [item.word]});
+    };
+    const plus = document.createElement('span');
+    plus.className = 'plus';
+    plus.textContent = '+';
+    plus.title = '加入自定义词库';
+    plus.onclick = (ev) => { ev.stopPropagation(); act('/api/pool/add', {word: item.word}); toast('已加入自定义：' + item.word); };
+    chip.appendChild(plus);
+    box.appendChild(chip);
+  });
+}
+
+function currentTabList() {
+  const key = TAB_WORD[tab];
+  return state[key] || [];
+}
+
+function renderPool() {
+  if (!state) return;
+  const all = currentTabList();
+  const keyword = poolSearchVal.trim().toLowerCase();
+  const list = all.filter(w => !keyword || w.toLowerCase().includes(keyword));
+
+  $('poolCount').textContent = '自定义 ' + (state.customWords || []).length
+      + ' / 人名 ' + (state.nameWords || []).length
+      + ' / 口语 ' + (state.slangWords || []).length
+      + ' / 正式 ' + (state.formalWords || []).length
+      + ' / 高频 ' + (state.highFreqWords || []).length;
+
+  const box = $('pool');
+  if (!list.length) { box.innerHTML = '<div class="empty">没有匹配的词</div>'; return; }
+  const inRound = new Set((state.currentWords || []).map(w => w.word));
+  box.innerHTML = '';
+  list.forEach(word => {
+    const chip = document.createElement('div');
+    chip.className = 'chip' + (inRound.has(word) ? ' active' : '')
+        + (tab === 'highfreq' ? ' hot' : '') + (tab === 'names' ? ' name' : '');
+    chip.innerHTML = '<span>' + esc(word) + '</span>';
+    chip.title = '点击：加进本轮';
+    chip.onclick = () => act('/api/words/add', {word: word});
+    if (tab === 'custom' || tab === 'names' || tab === 'highfreq') {
+      const del = document.createElement('span');
+      del.className = 'plus';
+      del.textContent = '×';
+      del.title = '从词库删除';
+      del.onclick = (ev) => {
+        ev.stopPropagation();
+        const url = tab === 'names' ? '/api/nameword/remove'
+                  : tab === 'highfreq' ? '/api/highfreq/remove'
+                  : '/api/pool/remove';
+        act(url, {word: word});
+      };
+      chip.appendChild(del);
+    }
+    box.appendChild(chip);
+  });
+}
+
+function renderAliases() {
+  const map = state.aliases || {};
+  const keys = Object.keys(map);
+  const box = $('aliasList');
+  if (!keys.length) { box.innerHTML = '<div class="empty">还没有配置别名（英文缩写会自动生成）</div>'; return; }
+  box.innerHTML = '';
+  keys.forEach(word => {
+    (map[word] || []).forEach(alias => {
+      const chip = document.createElement('div');
+      chip.className = 'chip';
+      chip.innerHTML = '<span>' + esc(word) + ' → ' + esc(alias) + '</span>';
+      const del = document.createElement('span');
+      del.className = 'plus';
+      del.textContent = '×';
+      del.onclick = (ev) => { ev.stopPropagation(); act('/api/alias/remove', {word: word, alias: alias}); };
+      chip.appendChild(del);
+      box.appendChild(chip);
+    });
+  });
+}
+
+function renderHistory() {
+  const list = state.history || [];
+  const box = $('history');
+  if (!list.length) { box.innerHTML = '<div class="empty">还没有记录</div>'; return; }
+  box.innerHTML = list.map(h =>
+      '<div class="item"><span class="t">' + esc(h.time) + '</span>'
+      + '<span class="w">' + esc((h.words || []).join(' / ')) + '</span></div>').join('');
+}
+
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+      ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 1800);
+}
+function splitWords(text) {
+  return String(text || '').split(/[\s,，、;；]+/).map(s => s.trim()).filter(Boolean);
+}
+
+function toggleRun() {
+  act(state && state.running ? '/api/stop' : '/api/start');
+  toast(state && state.running ? '已停止' : '游戏开始！');
+}
+
+function saveNext() {
+  const words = splitWords($('nextInput').value);
+  act('/api/set-next', {words: words});
+  toast(words.length ? '下一轮已预定：' + words.join(' / ') : '已取消预定');
+}
+function clearNext() { $('nextInput').value = ''; act('/api/set-next', {words: []}); toast('已取消预定'); }
+function applyStatsToNext() {
+  if (!state || !state.stats || !state.stats.length) { toast('本周期还没数据'); return; }
+  const words = state.stats.slice(0, state.wordsPerRound || 5).map(w => w.word);
+  $('nextInput').value = words.join(' ');
+  act('/api/set-next', {words: words});
+  toast('下一轮已预定：' + words.join(' / '));
+}
+function addCurrentWord() {
+  const v = $('addCurrentInput').value.trim();
+  if (!v) return;
+  $('addCurrentInput').value = '';
+  act('/api/words/add', {word: v});
+  toast('已加入本轮：' + v);
+}
+function saveConfig() {
+  act('/api/config', {
+    smartPick: $('smartToggle').checked,
+    smartPickChance: parseInt($('chance').value, 10),
+    wordsPerRound: parseInt($('perRound').value, 10),
+    namesPerRound: parseInt($('names').value, 10),
+    highFreqPerRound: parseInt($('highFreq').value, 10),
+    intervalSeconds: parseInt($('interval').value, 10)
+  });
+  toast('设置已保存');
+}
+function addWord() {
+  const v = $('addInput').value.trim();
+  if (!v) return;
+  $('addInput').value = '';
+  if (tab === 'names') {
+    act('/api/nameword/add', {word: v});
+    toast('已加入人名：' + v);
+  } else if (tab === 'highfreq') {
+    act('/api/highfreq/add', {word: v});
+    toast('已加入高频词：' + v);
+  } else if (tab === 'custom') {
+    act('/api/pool/add', {word: v});
+    toast('已加入自定义：' + v);
+  } else {
+    toast('「' + tab + '」是内置分类，不能直接加。请加到「自定义」/「人名」/「高频」');
+  }
+}
+function addAlias() {
+  const word = $('aliasWord').value.trim();
+  const aliases = splitWords($('aliasValue').value);
+  if (!word || !aliases.length) { toast('原词和别名都要填'); return; }
+  act('/api/alias/add', {word: word, aliases: aliases});
+  $('aliasValue').value = '';
+  toast('已为 ' + word + ' 添加 ' + aliases.length + ' 个谐音');
+}
+function simulate() {
+  const v = $('simInput').value.trim();
+  if (!v) return;
+  $('simInput').value = '';
+  act('/api/debug/speech', {text: v});
+  toast('已模拟：' + v);
+}
+
+document.querySelectorAll('.tab').forEach(el => {
+  el.onclick = () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('on'));
+    el.classList.add('on');
+    tab = el.dataset.tab;
+    renderPool();
+  };
+});
+
+poll();
+setInterval(poll, 1500);
+</script>
+</body>
+</html>

@@ -1,0 +1,107 @@
+plugins {
+    id 'fabric-loom' version "${loom_version}"
+    id 'maven-publish'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+repositories {
+    maven {
+        name = 'Modrinth'
+        url = 'https://api.modrinth.com/maven'
+        content {
+            includeGroup 'maven.modrinth'
+        }
+    }
+    mavenCentral()
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    // Mojang 官方映射：player.kill() / player.damageSources() 这些名字才存在
+    mappings loom.officialMojangMappings()
+
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+    // 语音识别（Shriek 自身依赖 Architectury，必须一起装）
+    modImplementation "maven.modrinth:shriek:${project.shriek_version}"
+    modImplementation "maven.modrinth:architectury-api:${project.architectury_version}"
+}
+
+processResources {
+    inputs.property "version", project.version
+    filesMatching("fabric.mod.json") {
+        expand "version": inputs.properties.version
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
+    it.options.encoding = "UTF-8"
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+// ---------------------------------------------------------------------------
+// 构建完自动把 jar 丢进游戏 mods 文件夹
+// 路径在 gradle.properties 的 game_mods_dir 里改
+// ---------------------------------------------------------------------------
+tasks.register('deployToGame') {
+    group = 'deployment'
+    description = '把构建产物复制到游戏 mods 目录（会先删掉旧的 voicekill-*.jar）'
+    dependsOn tasks.named('remapJar')
+
+    doLast {
+        def rawPath = project.findProperty('game_mods_dir')
+        if (!rawPath) {
+            logger.warn('[deploy] gradle.properties 里没有 game_mods_dir，跳过')
+            return
+        }
+        def targetDir = new File(rawPath as String)
+        if (!targetDir.isDirectory()) {
+            logger.warn("[deploy] mods 目录不存在，跳过：${targetDir}")
+            return
+        }
+
+        def built = tasks.named('remapJar').get().archiveFile.get().asFile
+        if (!built.isFile()) {
+            logger.warn('[deploy] 没找到构建产物，跳过')
+            return
+        }
+
+        // 先删旧的，避免同一个模组放了两个版本
+        targetDir.listFiles()?.each { f ->
+            if (f.isFile()
+                    && f.name.toLowerCase().startsWith(project.archives_base_name.toString().toLowerCase())
+                    && f.name.toLowerCase().endsWith('.jar')) {
+                if (f.delete()) {
+                    logger.lifecycle("[deploy] 删除旧版本：${f.name}")
+                } else {
+                    // 游戏开着的时候 jar 被占用，删不掉 —— 这时候 mods 里会出现两个同名模组，Fabric 会报错
+                    logger.warn("[deploy] 删不掉 ${f.name}！游戏是不是开着？"
+                            + "关掉游戏再构建，否则 mods 里会同时存在两个版本")
+                }
+            }
+        }
+
+        copy {
+            from built
+            into targetDir
+        }
+        logger.lifecycle("[deploy] 已部署：${new File(targetDir, built.name)}")
+    }
+}
+
+tasks.named('build') {
+    finalizedBy 'deployToGame'
+}

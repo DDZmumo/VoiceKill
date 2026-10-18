@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "voicekill",
+  "version": "${version}",
+  "name": "VoiceKill",
+  "description": "说到当前危险词就当场暴毙。语音识别由 Shriek 提供，服务端定时轮换危险词。",
+  "authors": [
+    "高冷小闪"
+  ],
+  "license": "MIT",
+  "environment": "*",
+  "mixins": [
+    "voicekill.mixins.json"
+  ],
+  "entrypoints": {
+    "main": [
+      "com.example.voicekill.VoiceKillMod"
+    ],
+    "client": [
+      "com.example.voicekill.client.VoiceKillClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": "*",
+    "architectury": ">=13.0.2",
+    "shriek": ">=1.1.2"
+  }
+}
