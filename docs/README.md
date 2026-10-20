@@ -20,3 +20,5 @@
 `../tools/inspect-shriek.ps1` 为手动接口检查工具，其输出 `shriek-javap.txt` 不纳入版本控制。
 
 - [dev.5 句末处理与验证](DEV5_VALIDATION.md)：当前候选版本的离线标点、复核与同组回放。
+
+- [dev.6 完整句与输入设备修复](DEV6_VALIDATION.md)：10 秒 / 0.6 秒配置及蓝牙设备选择回归。

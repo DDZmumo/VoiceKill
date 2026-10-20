@@ -76,9 +76,9 @@ public final class ModConfig {
     public int speechThreads = 1;
     /** 只提示带英文字母的多字昵称；不提示中文单字。 */
     public boolean speechContextHints = true;
-    public float speechEndpointSilenceSeconds = .35f;
+    public float speechEndpointSilenceSeconds = .6f;
     /** 无停顿时的最大语音段时长；还需加解码、网络和游戏 tick 时间。 */
-    public float speechMaxUtteranceSeconds = 5f;
+    public float speechMaxUtteranceSeconds = 10f;
     public boolean allowVoskFallback = true;
     /** 留空时缓存到游戏目录 voicekill/models/zipformer-bilingual-small-int8。 */
     public String speechModelDir = "";
@@ -210,9 +210,9 @@ public final class ModConfig {
         if (voskModel == null) voskModel = "";
         if (!"zipformer".equals(speechEngine) && !"vosk".equals(speechEngine)) speechEngine = "zipformer";
         speechThreads = Math.max(1, Math.min(4, speechThreads));
-        if (!Float.isFinite(speechEndpointSilenceSeconds)) speechEndpointSilenceSeconds = .35f;
+        if (!Float.isFinite(speechEndpointSilenceSeconds)) speechEndpointSilenceSeconds = .6f;
         speechEndpointSilenceSeconds = Math.max(.35f, Math.min(1.5f, speechEndpointSilenceSeconds));
-        if (!Float.isFinite(speechMaxUtteranceSeconds)) speechMaxUtteranceSeconds = 5f;
+        if (!Float.isFinite(speechMaxUtteranceSeconds)) speechMaxUtteranceSeconds = 10f;
         speechMaxUtteranceSeconds = Math.max(2f, Math.min(15f, speechMaxUtteranceSeconds));
         if (speechModelDir == null) speechModelDir = "";
         if (speechPostModelDir == null) speechPostModelDir = "";

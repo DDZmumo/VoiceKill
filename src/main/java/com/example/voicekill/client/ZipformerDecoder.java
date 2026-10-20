@@ -9,7 +9,7 @@ import java.util.function.Supplier;
 public final class ZipformerDecoder implements CaptureSession.Decoder {
     public record Settings(float endpointSilence, boolean contextHints, float hintScore, float maxUtteranceSeconds) {
         public Settings(float endpointSilence, boolean contextHints, float hintScore) {
-            this(endpointSilence, contextHints, hintScore, 5f);
+            this(endpointSilence, contextHints, hintScore, 10f);
         }
         public Settings {
             if (!Float.isFinite(endpointSilence) || endpointSilence < .25f || endpointSilence > 1.5f)
@@ -19,7 +19,7 @@ public final class ZipformerDecoder implements CaptureSession.Decoder {
             if (!Float.isFinite(maxUtteranceSeconds) || maxUtteranceSeconds < 2 || maxUtteranceSeconds > 15)
                 throw new IllegalArgumentException("连续讲话结算上限必须在 2～15 秒之间");
         }
-        public static Settings defaults() { return new Settings(.35f, true, 1.5f); }
+        public static Settings defaults() { return new Settings(.6f, true, 1.5f); }
     }
     private final OnlineRecognizer recognizer;
     private OnlineStream stream;
