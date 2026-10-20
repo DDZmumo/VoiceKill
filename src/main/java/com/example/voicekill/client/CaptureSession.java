@@ -19,6 +19,7 @@ public final class CaptureSession {
         default long epoch() { return 0; }
         default java.util.Set<Integer> literalCandidates() { return java.util.Set.of(); }
         default float[] utteranceSamples() { return null; }
+        default boolean reviewConfirmed(){return false;}
         default String partial() { return ""; }
         default String displayFinal(List<String> candidates) { return candidates.isEmpty()?"":candidates.getFirst(); }
         @Override void close();

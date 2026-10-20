@@ -7,6 +7,7 @@ import java.util.*;
 /** Re-evaluate unchanged saved ASR events; no model inference or latency claim. */
 public final class ReviewedReplayCheck {
     public static void main(String[] args) throws Exception {
+        GameTerms.awaitReady();
         var gson=new GsonBuilder().setPrettyPrinting().create();var summaries=new ArrayList<Map<String,Object>>();
         String input=args.length>0?args[0]:".local/diagnostics/dev7";String prefix=args.length>0?"":"final-";
         for(String name:List.of("original","negative","letters","sentences","mixed")) {
@@ -25,7 +26,8 @@ public final class ReviewedReplayCheck {
                     for(var value:row.getAsJsonArray("events")) {
                         var event=value.getAsJsonObject();var candidates=new ArrayList<String>();for(var c:event.getAsJsonArray("candidates"))candidates.add(c.getAsString());
                         boolean accepted=event.has("postprocess")&&event.getAsJsonObject("postprocess").has("latest")&&event.getAsJsonObject("postprocess").getAsJsonObject("latest").get("accepted").getAsBoolean();
-                        var packet=SpeechPacket.parse(SpeechPacket.encode(candidates,accepted?Set.of(candidates.size()-1):Set.of()));
+                        boolean confirmed=accepted||event.has("reviewConfirmed")&&event.get("reviewConfirmed").getAsBoolean()||event.has("postprocess")&&event.getAsJsonObject("postprocess").has("latest")&&event.getAsJsonObject("postprocess").getAsJsonObject("latest").get("reason").getAsString().equals("unchanged");
+                        var packet=SpeechPacket.parse(SpeechPacket.encode(candidates,accepted?Set.of(candidates.size()-1):Set.of(),confirmed));
                         long now=100000+Math.round(event.get(report.get("realtime").getAsBoolean()?"wallMs":"audioMs").getAsDouble());
                         if(window.accept("p",packet,List.of(word),now).hit()!=null){current.add(word.text());break;}
                     }
@@ -36,7 +38,7 @@ public final class ReviewedReplayCheck {
             var summary=new LinkedHashMap<String,Object>();summary.put("group",name);summary.put("hits",hits);summary.put("falseHits",falseHits);summary.put("lost",losses);summary.put("newFalse",newFalse);summary.put("removedFalse",removedFalse);summaries.add(summary);
             if(!newFalse.isEmpty())throw new AssertionError(gson.toJson(summary));
         }
-        Files.createDirectories(Path.of(".local/diagnostics/dev8"));Files.writeString(Path.of(".local/diagnostics/dev8/reviewed-events.json"),gson.toJson(summaries));
+        Files.createDirectories(Path.of(".local/diagnostics/dev9"));Files.writeString(Path.of(".local/diagnostics/dev9/reviewed-events.json"),gson.toJson(summaries));
         System.out.println(gson.toJson(summaries));
     }
 }

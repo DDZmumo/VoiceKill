@@ -48,6 +48,7 @@ public final class SpeechWindow {
             boolean secondary = i != 0;
             WordMatcher.Hit hit = WordMatcher.find(words, fresh, secondary, 0);
             if (WordMatcher.prefer(hit,found,words)) { found = hit; foundCandidate = i; }
+            if(i==0&&!reviewed){var domain=GameTerms.find(words,fresh,fresh,packet.reviewConfirmed());if(WordMatcher.prefer(domain,found,words)){found=domain;foundCandidate=i;}}
             addTail(next, new Path(fresh, secondary));
             for (Path tail : old) {
                 String joined = tail.text() + fresh;

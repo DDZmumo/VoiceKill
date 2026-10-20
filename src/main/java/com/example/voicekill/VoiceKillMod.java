@@ -33,6 +33,7 @@ public class VoiceKillMod implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        com.example.voicekill.speech.GameTerms.warmUp();
         config = ModConfig.load();
         speechStats = new SpeechStats();
         dangerWordManager = new DangerWordManager(config, speechStats);

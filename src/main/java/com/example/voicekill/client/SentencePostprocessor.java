@@ -77,12 +77,22 @@ public final class SentencePostprocessor implements AutoCloseable {
         if(a.isEmpty()||!a.equals(b))return "unstable";
         if(a.length()>512)return "too-long";
         if(raw.stream().anyMatch(text->TextUtil.normalize(text).equals(a)))return "unchanged";
+        // The configured recognizer is Chinese/English. SenseVoice language detection
+        // may turn a short Chinese syllable into kana; that is not a Chinese correction.
+        if(supportedScript(original)&&!supportedScript(a))return "unsupported-script";
+        if(com.example.voicekill.speech.GameTerms.retainPrimary(raw.getFirst(),first))return "primary-retained";
         if(raw.size()>=3)return "candidate-limit";
         int prior=letters(original),next=letters(a);
         if(prior!=0&&(prior&next)==0)return "conflicting-letters";
         return "accepted";
     }
     private static int letters(String value) {int bits=0;for(char c:value.toCharArray())if(c>='a'&&c<='z')bits|=1<<(c-'a');return bits;}
+    private static boolean supportedScript(String value) {
+        return value.codePoints().filter(Character::isLetter).allMatch(c->{
+            var script=Character.UnicodeScript.of(c);
+            return script==Character.UnicodeScript.HAN||script==Character.UnicodeScript.LATIN;
+        });
+    }
     private static String content(String value) {
         StringBuilder result=new StringBuilder();
         TextUtil.normalize(value).codePoints().filter(c->{int type=Character.getType(c);return type!=Character.CONNECTOR_PUNCTUATION

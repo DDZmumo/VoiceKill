@@ -92,7 +92,7 @@ public final class MicCapture {
             final long token = ++generation;
             final CaptureSession.Decoder activeDecoder = decoder;
             session = new CaptureSession(source, decoder, candidates -> {
-                String packet = SpeechPacket.encode(candidates, activeDecoder.literalCandidates());
+                String packet = SpeechPacket.encode(candidates, activeDecoder.literalCandidates(),activeDecoder.reviewConfirmed());
                 if (config.logSpeech && activeDecoder instanceof EnhancedDecoder post)
                     VoiceKillMod.LOGGER.info("[VoiceKill] 句末处理：{}", post.snapshot());
                 Minecraft client = Minecraft.getInstance();

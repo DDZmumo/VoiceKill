@@ -33,6 +33,8 @@ public final class ReviewMatcher {
                 if(WordMatcher.prefer(hit,found,words))found=hit;
             }
         }
+        var domain=GameTerms.find(words,primary,reviewed,true);
+        if(WordMatcher.prefer(domain,found,words))found=domain;
         return found;
     }
 }

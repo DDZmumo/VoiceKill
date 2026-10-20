@@ -117,7 +117,7 @@ def main():
     checksum = digest(archive)
     (output / (archive.name + '.sha256')).write_text(checksum + '  ' + archive.name + '\n', encoding='utf-8')
     report = dict(archive=str(archive), size=archive.stat().st_size, sha256=checksum, sourceCommit=commit)
-    report_path = ROOT / '.local/diagnostics/dev7/package-result.json'
+    report_path = ROOT / '.local/diagnostics' / ('dev' + version.rsplit('dev.', 1)[-1]) / 'package-result.json'
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report, indent=2), encoding='utf-8')
     print(json.dumps(report))

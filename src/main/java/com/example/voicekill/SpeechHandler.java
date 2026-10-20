@@ -74,7 +74,7 @@ public final class SpeechHandler {
         var packet = com.example.voicekill.speech.SpeechPacket.parse(rawPacketText);
         if (packet.candidates().isEmpty()) return;
         String rawText = packet.candidates().getFirst();
-        String text = packet.finalText();
+        String text = com.example.voicekill.speech.GameTerms.display(rawText,packet.finalText(),packet.reviewConfirmed());
         String speaker = player == null ? "simulation" : player.getUUID().toString();
         var result = WINDOW.accept(speaker, packet, manager.matchingWords(), System.currentTimeMillis());
         if (result.duplicate()) return;

@@ -7,8 +7,9 @@ import java.util.Set;
 import java.util.LinkedHashSet;
 
 /** 保留 Shriek 文本通道；带编号的新包只按事件去重，不按说出的文字去重。 */
-public record SpeechPacket(String eventId, List<String> candidates, Set<Integer> literalCandidates) {
-    public SpeechPacket(String eventId,List<String> candidates){this(eventId,candidates,Set.of());}
+public record SpeechPacket(String eventId, List<String> candidates, Set<Integer> literalCandidates, boolean reviewConfirmed) {
+    public SpeechPacket(String eventId,List<String> candidates){this(eventId,candidates,Set.of(),false);}
+    public SpeechPacket(String eventId,List<String> candidates,Set<Integer> literalCandidates){this(eventId,candidates,literalCandidates,!literalCandidates.isEmpty());}
     public SpeechPacket {
         candidates=List.copyOf(candidates);literalCandidates=Set.copyOf(literalCandidates);
         for(int index:literalCandidates)if(index<1||index>=candidates.size())throw new IllegalArgumentException("无效复核候选索引");
@@ -26,16 +27,17 @@ public record SpeechPacket(String eventId, List<String> candidates, Set<Integer>
         String[] parts = raw.split(SEPARATOR, -1);
         int first = 0;
         String id = null;
-        Set<Integer> literal=new LinkedHashSet<>();
+        Set<Integer> literal=new LinkedHashSet<>();boolean confirmed=false;
         if (parts[0].startsWith(PREFIX) && parts[0].endsWith("]")) {
             String candidateId = parts[0].substring(PREFIX.length(), parts[0].length() - 1);
             try {
                 String[] metadata=candidateId.split("\\|",-1);
-                if(metadata.length>2)throw new IllegalArgumentException("无效候选来源");
-                id = UUID.fromString(metadata[0]).toString(); first = 1;
-                if(metadata.length==2) {
-                    if(!metadata[1].matches("L=[12](,[12])?"))throw new IllegalArgumentException("无效候选来源");
-                    for(String index:metadata[1].substring(2).split(","))literal.add(Integer.parseInt(index));
+                if(metadata.length>3)throw new IllegalArgumentException("无效候选来源");
+                id=UUID.fromString(metadata[0]).toString();first=1;
+                for(int i=1;i<metadata.length;i++) {
+                    if(metadata[i].equals("C=1")){if(confirmed)throw new IllegalArgumentException("重复确认");confirmed=true;}
+                    else if(metadata[i].matches("L=[12](,[12])?")&&literal.isEmpty())for(String index:metadata[i].substring(2).split(","))literal.add(Integer.parseInt(index));
+                    else throw new IllegalArgumentException("无效候选来源");
                 }
             }
             catch (IllegalArgumentException ignored) { return new SpeechPacket(null, List.of()); }
@@ -52,15 +54,17 @@ public record SpeechPacket(String eventId, List<String> candidates, Set<Integer>
                 candidates.add(text);
             }
         }
-        return new SpeechPacket(id, List.copyOf(candidates),mapped);
+        return new SpeechPacket(id, List.copyOf(candidates),mapped,confirmed||!mapped.isEmpty());
     }
 
     public static String encode(List<String> candidates) {
         return encode(candidates,Set.of());
     }
-    public static String encode(List<String> candidates,Set<Integer> literal) {
+    public static String encode(List<String> candidates,Set<Integer> literal) {return encode(candidates,literal,!literal.isEmpty());}
+    public static String encode(List<String> candidates,Set<Integer> literal,boolean confirmed) {
         for(int index:literal)if(index<1||index>=candidates.size()||index>2)throw new IllegalArgumentException("无效复核候选索引");
         String metadata=literal.isEmpty()?"":"|L="+literal.stream().sorted().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
+        if(confirmed&&literal.isEmpty())metadata+="|C=1";
         return PREFIX + UUID.randomUUID()+metadata + "]" + SEPARATOR + String.join(SEPARATOR, candidates);
     }
 }

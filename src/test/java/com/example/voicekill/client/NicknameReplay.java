@@ -55,6 +55,7 @@ public final class NicknameReplay {
     }
 
     public static void main(String[] args) throws Exception {
+        com.example.voicekill.speech.GameTerms.awaitReady();
         String engine=args.length>4 ? args[4] : "zipformer";
         List<String> targets=args.length>5 && !args[5].isBlank() ? List.of(args[5].split(",")) : TARGETS;
         boolean realtime=args.length<7 || Boolean.parseBoolean(args[6]);
@@ -152,9 +153,10 @@ public final class NicknameReplay {
             Map<String, Object> event = new LinkedHashMap<>();
             event.put("candidates", candidates); event.put("wallMs", wallMs); event.put("audioMs", audioMs);
             event.put("afterSpeechEndMs", wallMs - clip.speechEndSample() / 16.0); events.add(event);
+            event.put("reviewConfirmed",activeDecoder.reviewConfirmed());
             if(activeDecoder instanceof EnhancedDecoder enhanced)event.put("postprocess",enhanced.snapshot());
             SpeechPacket packet = SpeechPacket.parse(SpeechPacket.encode(candidates,
-                    activeDecoder instanceof EnhancedDecoder enhanced?enhanced.literalCandidates():java.util.Set.of()));
+                    activeDecoder instanceof EnhancedDecoder enhanced?enhanced.literalCandidates():java.util.Set.of(),activeDecoder.reviewConfirmed()));
             long matchingTime = realtime ? System.currentTimeMillis() : 1_000_000L + Math.round(audioMs);
             if(combined.get()==null) {
                 var best=allWords.accept("combined",packet,evaluationWords,matchingTime);

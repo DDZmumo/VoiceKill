@@ -66,7 +66,8 @@ public final class EnhancedDecoder implements CaptureSession.Decoder {
     }
     @Override public CaptureSession.Boundary boundary(){return base.boundary();}
     @Override public String partial(){return base.partial();}
-    @Override public String displayFinal(List<String> candidates){return latest==null?base.displayFinal(candidates):latest.punctuated();}
+    @Override public boolean reviewConfirmed(){return latest!=null&&(latest.accepted()||latest.reason().equals("unchanged"));}
+    @Override public String displayFinal(List<String> candidates){return latest==null?base.displayFinal(candidates):com.example.voicekill.speech.GameTerms.display(latest.raw(),latest.punctuated(),reviewConfirmed());}
     @Override public long epoch(){return base.epoch();}
     @Override public void close() {
         SentencePostprocessor current;
