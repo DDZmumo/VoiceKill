@@ -32,19 +32,19 @@ public final class SpeechWindow {
         for (int i = 0; i < packet.candidates().size(); i++) {
             if(packet.literalCandidates().contains(i)) {
                 var reviewed=ReviewMatcher.find(words,packet.candidates().get(i),packet.candidates().getFirst());
-                if(found==null&&reviewed!=null){found=reviewed;foundCandidate=i;}
+                if(WordMatcher.prefer(reviewed,found,words)){found=reviewed;foundCandidate=i;}
                 continue;
             }
             String fresh = TextUtil.normalize(packet.candidates().get(i));
             boolean secondary = i != 0;
             WordMatcher.Hit hit = WordMatcher.find(words, fresh, secondary, 0);
-            if (found == null && hit != null) { found = hit; foundCandidate = i; }
+            if (WordMatcher.prefer(hit,found,words)) { found = hit; foundCandidate = i; }
             addTail(next, new Path(fresh, secondary));
             for (Path tail : old) {
                 String joined = tail.text() + fresh;
                 boolean branchSecondary = secondary || tail.secondary();
                 hit = WordMatcher.find(words, joined, branchSecondary, tail.text().length());
-                if (found == null && hit != null) { found = hit; foundCandidate = i; }
+                if (WordMatcher.prefer(hit,found,words)) { found = hit; foundCandidate = i; }
                 addTail(next, new Path(joined, branchSecondary));
             }
         }

@@ -127,7 +127,10 @@ public final class SpeechHandler {
         VoiceKillMod.LOGGER.info("[VoiceKill] {} 说出了危险词「{}」→ 执行 kill（识别原文：{}）",
                 player.getName().getString(), matched, rawText);
 
-        announceKill(matched, player, rawText);
+        ModConfig config=ModConfig.get();
+        Component deathMessage=config!=null&&config.customDeathMessages
+                ? DeathMessages.render(DeathMessages.choose(DeathMessages.pool(config.deathMessageStyle,config.deathMessages),java.util.concurrent.ThreadLocalRandom.current()),player.getDisplayName(),matched):null;
+        announceKill(matched,player,rawText);
 
         // 记一笔言多必失
         manager.recordDeath(player.getName().getString());
@@ -135,9 +138,10 @@ public final class SpeechHandler {
         // 死完清掉尾巴，避免复活瞬间被上一句拼出来的词再带走一次
         WINDOW.forget(player.getUUID().toString());
 
-        // 这就是 /kill：直接抹掉，不走命令、不发数据包。
-        // 注意 1.21.11 的签名是 kill(ServerLevel)，不是无参的 kill()
-        player.kill(player.level());
+        // Minecraft 1.21.11 LivingEntity.kill calls hurtServer(genericKill, Float.MAX_VALUE).
+        // Keep the same registered damage type/tags and amount, replacing only death text.
+        if(deathMessage==null)player.kill(player.level());
+        else player.hurtServer(player.level(),DeathMessages.source(player.damageSources().genericKill(),deathMessage),Float.MAX_VALUE);
     }
 
     /** 在聊天栏告诉所有人谁踩雷了 */
@@ -146,9 +150,17 @@ public final class SpeechHandler {
         if (server == null) {
             return;
         }
-        Component message = Component.literal("[VoiceKill] ")
+        Component message = killNotice(matched,victim.getName().getString(),rawText);
+
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            player.displayClientMessage(message, false);
+        }
+    }
+    /** Keep the original transcript visible alongside the styled native death message. */
+    static Component killNotice(String matched,String victimName,String rawText) {
+        return Component.literal("[VoiceKill] ")
                 .withStyle(ChatFormatting.DARK_RED, ChatFormatting.BOLD)
-                .append(Component.literal(victim.getName().getString())
+                .append(Component.literal(victimName)
                         .withStyle(ChatFormatting.WHITE))
                 .append(Component.literal(" 说出了危险词「")
                         .withStyle(ChatFormatting.GRAY))
@@ -161,8 +173,6 @@ public final class SpeechHandler {
                 .append(Component.literal("）")
                         .withStyle(ChatFormatting.GRAY));
 
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            player.displayClientMessage(message, false);
-        }
     }
+
 }

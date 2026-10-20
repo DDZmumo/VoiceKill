@@ -10,7 +10,7 @@ public final class ReviewMatcher {
     private ReviewMatcher() {}
     public static WordMatcher.Hit find(List<WordMatcher.Word> words,String reviewed,String primary) {
         String text=TextUtil.normalize(reviewed),raw=TextUtil.normalize(primary);
-        for(var word:words) {
+        for(var word:WordMatcher.ordered(words)) {
             String target=TextUtil.normalize(word.text());
             if(target.length()<2||!target.matches(".*[a-z].*"))continue;
             var han=HAN.matcher(target);boolean supported=true;

@@ -31,9 +31,22 @@ public final class MicCapture {
     private static volatile long generation;
     private static volatile boolean attempted;
     private static volatile List<String> recognitionWords = List.of();
+    private static volatile List<com.example.voicekill.speech.WordMatcher.Word> recognitionVocabulary=List.of();
 
     public static void updateRecognitionWords(List<String> words) {
-        recognitionWords = RecognitionHints.names(words);
+        List<String> current=List.copyOf(words);
+        if(!current.equals(recognitionWords))recognitionVocabulary=List.of();
+        recognitionWords=current;
+    }
+    public static void updateRecognitionVocabulary(List<String> words,List<Boolean> preferred) {
+        if(!words.equals(recognitionWords))return;
+        List<com.example.voicekill.speech.WordMatcher.Word> result=new ArrayList<>();
+        for(int i=0;i<words.size();i++)result.add(new com.example.voicekill.speech.WordMatcher.Word(words.get(i),preferred.get(i)?"manual":"random",List.of(),preferred.get(i)));
+        recognitionVocabulary=List.copyOf(result);
+    }
+    private static String hints() {
+        var vocabulary=recognitionVocabulary;
+        return vocabulary.isEmpty()?RecognitionHints.encode(recognitionWords):RecognitionHints.encodePriority(vocabulary);
     }
 
     private MicCapture() {}
@@ -88,7 +101,7 @@ public final class MicCapture {
                         ShriekPackets.sendToServer(new PlayerSpeakPacket(packet));
                     }
                 });
-            }, failure -> VoiceKillMod.LOGGER.error("[VoiceKill] 录音会话中断：{}", failure));
+            }, failure -> VoiceKillMod.LOGGER.error("[VoiceKill] 录音会话中断：{}", failure), SpeechTranscript::update);
             session.start();
             VoiceKillMod.LOGGER.info("[VoiceKill] 录音已启动：{}，{} → 16kHz mono；识别引擎={}", currentDevice, inputFormat, activeEngine);
             return true;
@@ -113,8 +126,23 @@ public final class MicCapture {
                             .resolve("voicekill/models/zipformer-bilingual-small-int8")
                         : Path.of(config.speechModelDir);
                 VoiceKillMod.LOGGER.info("[VoiceKill] 准备本地中英双语模型（首次约 60MB）：{}", directory);
-                var decoder = new ZipformerDecoder(SpeechModels.prepare(directory, config.autoModelDownload), config.speechThreads,
-                        () -> recognitionWords, new ZipformerDecoder.Settings(config.speechEndpointSilenceSeconds, config.speechContextHints, 1.5f, config.speechMaxUtteranceSeconds));
+                Path ready=SpeechModels.prepare(directory, config.autoModelDownload);
+                var settings=new ZipformerDecoder.Settings(config.speechEndpointSilenceSeconds, config.speechContextHints, 1.5f, config.speechMaxUtteranceSeconds);
+                if(config.speechNaturalBoundary) {
+                    try {
+                        Path vadRoot=config.speechPostModelDir.isBlank()
+                                ?net.fabricmc.loader.api.FabricLoader.getInstance().getGameDir().resolve("voicekill/models")
+                                :Path.of(config.speechPostModelDir);
+                        Path vad=SpeechModels.prepare(vadRoot.resolve("silero-vad"),config.autoModelDownload,"silero-vad");
+                        var natural=new NaturalSpeechDecoder(ready,vad.resolve("silero_vad.onnx"),config.speechThreads,()->recognitionWords,settings,MicCapture::hints);
+                        activeEngine="Zipformer 中英双语 · 声学自然断句";
+                        return natural;
+                    } catch(Exception|LinkageError failure) {
+                        note="自然断句模型不可用，暂用流式端点："+CaptureSession.rootCause(failure);
+                        VoiceKillMod.LOGGER.warn("[VoiceKill] {}",note);
+                    }
+                }
+                var decoder = new ZipformerDecoder(ready, config.speechThreads, () -> recognitionWords, settings);
                 activeEngine = "Zipformer 中英双语 INT8";
                 return decoder;
             } catch (Exception | LinkageError failure) {
@@ -168,7 +196,7 @@ public final class MicCapture {
             lastError = "旧录音线程未退出，请重启游戏后重试";
             return false;
         }
-        session = null; enhanced = null; state = "idle";
+        session = null; enhanced = null; state = "idle"; SpeechTranscript.clear();
         return true;
     }
 

@@ -55,7 +55,8 @@ public final class EnhancedDecoder implements CaptureSession.Decoder {
                 latest=new SentencePostprocessor.Snapshot(raw.getFirst(),"",raw.getFirst(),false,state,0,0,error,0);
                 return raw;
             }
-            List<String> result=current.process(raw,audio.samples());latest=current.snapshot();
+            float[] finalized = base.utteranceSamples();
+            List<String> result=current.process(raw,finalized==null?audio.samples():finalized);latest=current.snapshot();
             if(latest.accepted())literalCandidates=Set.of(result.size()-1);return result;
         } finally {audio.clear();}
     }
@@ -64,6 +65,8 @@ public final class EnhancedDecoder implements CaptureSession.Decoder {
         if(latest!=null)result.put("latest",latest);return result;
     }
     @Override public CaptureSession.Boundary boundary(){return base.boundary();}
+    @Override public String partial(){return base.partial();}
+    @Override public String displayFinal(List<String> candidates){return latest==null?base.displayFinal(candidates):latest.punctuated();}
     @Override public long epoch(){return base.epoch();}
     @Override public void close() {
         SentencePostprocessor current;

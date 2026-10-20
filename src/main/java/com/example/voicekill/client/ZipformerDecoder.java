@@ -25,6 +25,7 @@ public final class ZipformerDecoder implements CaptureSession.Decoder {
     private OnlineStream stream;
     private final Supplier<List<String>> words;
     private final Settings settings;
+    private final Supplier<String> hintOverride;
     private final UtteranceBudget budget;
     private boolean hasHypothesis;
     private String activeHints;
@@ -41,8 +42,12 @@ public final class ZipformerDecoder implements CaptureSession.Decoder {
     }
 
     public ZipformerDecoder(Path directory, int threads, Supplier<List<String>> words, Settings settings) {
+        this(directory,threads,words,settings,null);
+    }
+    public ZipformerDecoder(Path directory, int threads, Supplier<List<String>> words, Settings settings,Supplier<String> hintOverride) {
         this.words = words;
         this.settings = settings;
+        this.hintOverride=hintOverride;
         this.budget = new UtteranceBudget(settings.maxUtteranceSeconds());
         var transducer = OnlineTransducerModelConfig.builder()
                 .setEncoder(directory.resolve("encoder.int8.onnx").toString())
@@ -73,6 +78,7 @@ public final class ZipformerDecoder implements CaptureSession.Decoder {
 
     private String hints() {
         if (!settings.contextHints()) return "";
+        if(hintOverride!=null)return hintOverride.get();
         List<String> requested = words.get();
         if (!requested.equals(cachedWords)) {
             cachedWords = List.copyOf(requested);
@@ -99,6 +105,32 @@ public final class ZipformerDecoder implements CaptureSession.Decoder {
 
     public static float[] pcmSamples(byte[] bytes) {
         return AudioCapture.pcmSamples(bytes);
+    }
+
+    /** 显示用的流式假设，不作为处罚候选。自然边界确认后才完成同一识别流。 */
+    public String preview(byte[] pcm) {
+        stream.acceptWaveform(pcmSamples(pcm),16000);
+        while(recognizer.isReady(stream))recognizer.decode(stream);
+        return recognizer.getResult(stream).getText().trim();
+    }
+
+    public void resetPreview() {
+        String nextHints=hints();
+        OnlineStream next=createStream(nextHints);
+        stream.release();stream=next;activeHints=nextHints;
+    }
+
+    public void seedPreview(float[] samples) {
+        if(samples.length==0)return;
+        stream.acceptWaveform(samples,16000);
+        while(recognizer.isReady(stream))recognizer.decode(stream);
+    }
+
+    public List<String> finishPreview() {
+        stream.acceptWaveform(new float[10560],16000);stream.inputFinished();
+        while(recognizer.isReady(stream))recognizer.decode(stream);
+        String text=recognizer.getResult(stream).getText().trim();
+        return text.isEmpty()?List.of():List.of(text);
     }
 
     @Override public List<String> accept(byte[] bytes) {

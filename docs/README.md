@@ -19,6 +19,11 @@
 `console-desktop.png`、`console-mobile.png` 为控制台展示图。
 `../tools/inspect-shriek.ps1` 为手动接口检查工具，其输出 `shriek-javap.txt` 不纳入版本控制。
 
-- [dev.5 句末处理与验证](DEV5_VALIDATION.md)：当前候选版本的离线标点、复核与同组回放。
+- [dev.5 句末处理与验证](DEV5_VALIDATION.md)：dev.5 历史候选版本的离线标点、复核与同组回放。
 
 - [dev.6 完整句与输入设备修复](DEV6_VALIDATION.md)：10 秒 / 0.6 秒配置及蓝牙设备选择回归。
+
+- [dev.7 安装与设置](DEV7_SETTINGS.md)：当前候选版，F7 设置、实时转写、换行和可移动榜单。
+- [dev.7 自然断句与复测](DEV7_VALIDATION.md)：同组音频结果、保留问题和原生游戏界面验证。
+
+- [dev.7 完整包安装教程](INSTALL_DEV7.md)：四模组、四模型的客户端与服务端安装。

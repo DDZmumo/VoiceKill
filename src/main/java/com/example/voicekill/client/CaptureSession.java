@@ -18,12 +18,17 @@ public final class CaptureSession {
         default Boundary boundary() { return Boundary.NONE; }
         default long epoch() { return 0; }
         default java.util.Set<Integer> literalCandidates() { return java.util.Set.of(); }
+        default float[] utteranceSamples() { return null; }
+        default String partial() { return ""; }
+        default String displayFinal(List<String> candidates) { return candidates.isEmpty()?"":candidates.getFirst(); }
         @Override void close();
     }
     private final Source source;
     private final Decoder decoder;
     private final Consumer<List<String>> sink;
     private final Consumer<String> onFailure;
+    private final Consumer<Transcript> progress;
+    public record Transcript(String text,boolean interim) {}
     private final Thread thread;
     private final AtomicBoolean sourceClosed = new AtomicBoolean();
     private volatile boolean stopping;
@@ -37,10 +42,15 @@ public final class CaptureSession {
     }
 
     public CaptureSession(Source source, Decoder decoder, Consumer<List<String>> sink, Consumer<String> onFailure) {
+        this(source,decoder,sink,onFailure,ignored -> {});
+    }
+
+    public CaptureSession(Source source, Decoder decoder, Consumer<List<String>> sink, Consumer<String> onFailure,Consumer<Transcript> progress) {
         this.source = source;
         this.decoder = decoder;
         this.sink = sink;
         this.onFailure = onFailure;
+        this.progress = progress;
         thread = new Thread(this::loop, "VoiceKill-MicCapture");
         thread.setDaemon(true);
     }
@@ -82,7 +92,12 @@ public final class CaptureSession {
                 level = Math.min(1, Math.sqrt((double) energy / Math.max(1, count / 2)) / 32768);
                 List<String> candidates = decoder.accept(Arrays.copyOf(buffer, count));
                 // 不按文字去重：两个连续相同的端点结果可以是两个真实音节/语句。
-                if (!stopping && !candidates.isEmpty()) sink.accept(candidates);
+                if (!stopping) {
+                    if (!candidates.isEmpty()) {
+                        progress.accept(new Transcript(decoder.displayFinal(candidates),false));
+                        sink.accept(candidates);
+                    } else progress.accept(new Transcript(decoder.partial(),true));
+                }
             }
         } catch (Throwable failure) {
             if (!stopping) { state = "failed"; error = rootCause(failure); }

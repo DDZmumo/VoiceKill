@@ -40,6 +40,7 @@ public class VoiceKillMod implements ModInitializer {
 
         // 注册 S2C 通道（两边都要注册，客户端才能收）
         PayloadTypeRegistry.playS2C().register(HudStatePayload.TYPE, HudStatePayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(com.example.voicekill.network.RecognitionLexiconPayload.TYPE,com.example.voicekill.network.RecognitionLexiconPayload.CODEC);
 
         // /voicekill start | stop | status（别名 /vk）
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->

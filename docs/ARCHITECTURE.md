@@ -1,6 +1,6 @@
 # 项目结构与运行机制
 
-依据 2026-10-19 的 1.0.15-dev.6 源码；历史交接资料来自 1.0.14。
+依据 2026-10-20 的 1.0.15-dev.7 源码；历史交接资料来自 1.0.14。
 实际修复和验证边界见 [修复与验收说明](FIXES_AND_VALIDATION.md)。
 
 ## 目录约定
@@ -13,7 +13,7 @@ VoiceKill/
 ├── gradle.properties         依赖/候选版本；个人部署路径默认不启用
 ├── gradlew / gradlew.bat      Gradle Wrapper 入口
 ├── gradle/wrapper/            Wrapper 配置与 JAR（纳入 Git）
-├── src/main/java/            34 个 Java 源文件
+├── src/main/java/            Java 源文件
 ├── src/main/resources/       模组元数据、语言、Mixin 配置、网页
 ├── src/test/java/            匹配、断句、录音生命周期与 PCM 转换回归
 ├── docs/                     开发说明、接口资料和展示图
@@ -30,6 +30,8 @@ Java 包名仍为 `com.example.voicekill`。网页是资源中的单文件 HTML/
 | `VoiceKillMod.java` | 装配配置、语音/命令/tick/连接/服务器生命周期事件 |
 | `DangerWordManager.java` | 开始/停止、计时与组词、当前词更新、快照和 HUD、网页操作与安全预览 |
 | `SpeechHandler.java` | 将完整语音处理排到服务端线程，统计最优文本、匹配、日志和处决 |
+| `DeathMessages.java` | 服务端死亡文案清理、随机选择、字面占位符渲染及保留 generic-kill 类型的死亡消息 |
+| `client/DeathMessagesScreen.java` | 本地世界死亡文本草稿编辑、开关与示例预览 |
 | `DeathBoard.java` | 内存中的死亡次数排行 |
 | `command/VoiceKillCommand.java` | `/voicekill start/stop/status` 及 `/vk` 别名；当前没有 OP 限制 |
 | `config/ModConfig.java` | Gson 配置读写与范围校验 |
@@ -42,32 +44,34 @@ Java 包名仍为 `com.example.voicekill`。网页是资源中的单文件 HTML/
 | `util/WordAliases.java` | 展示别名生成和无需展开笛卡尔积的读音规则 |
 | `util/FuzzyMatch.java` | 有长度门槛的滑窗编辑距离匹配 |
 | `network/HudStatePayload.java` | 最多 20 个危险词、计时与死亡榜的 S2C 状态 |
-| `client/VoiceKillClient.java` | HUD/F8 注册，后台启动模型和录音会话 |
+| `client/VoiceKillClient.java` | HUD/F7/F8 注册，后台启动模型和录音会话 |
 | `client/MicCapture.java` | 停止 Shriek 采音，可切换的识别器工厂、实际引擎/回退提示及主线程发包 |
 | `client/ZipformerDecoder.java` | 有限束搜索、动态词表、自适应端点、段状态隔离与资源释放 |
-| `client/RecognitionHints.java` | 从游戏词表中提取带字母的多字昵称，构造 ASR 提示；不改匹配规则 |
+| `client/RecognitionHints.java` | 从本轮原词及优先标记构造字母/低强度长中文提示；不改匹配规则 |
 | `client/UtteranceBudget.java` | 两种引擎共用的连续讲话采样预算；空闲不计时、不依赖危险词内容 |
 | `client/EnhancedDecoder.java`、`client/PcmUtterance.java` | 有界保留段音频，后台加载可选模型，沿用原识别结算边界 |
 | `client/SentencePostprocessor.java`、`client/NativeSentenceModels.java` | 两次一致的音频复核、正文不变的标点展示与故障回退 |
 | `speech/ReviewMatcher.java` | 复核候选仅按当前段的字母词精确包含；中文部分必须有原始识别依据 |
-| `client/SpeechModels.java` | 固定模型清单、后台下载、SHA256 校验及本地缓存 |
+| `client/SpeechModels.java` | 固定模型清单、后台下载、SHA256 校验、本地缓存及按目录隔离的不可变实时进度快照 |
+| `client/ModelDownloadsScreen.java` | F7 模型实时进度页；渲染时只读取快照，不在渲染线程下载或校验权重 |
 | `client/AudioCapture.java` | Java Sound 格式探测/设备打开，转换为 16kHz mono PCM |
 | `client/CaptureSession.java` | 独占输入与识别器的工作线程、音量、退出状态和资源清理 |
 | `client/AudioDevices.java`、`client/MicScreen.java` | 设备枚举、分页选择、实时状态和错误显示 |
 | `client/HudOverlay.java` | 危险词、倒计时与死亡榜渲染 |
 | `web/WebConsole.java` | JDK HttpServer 和 JSON 操作接口 |
-| `mixin/` 下两个类 | 历史设备重定向方案；当前 Mixin JSON 没有注册它们 |
+| `mixin/` 下两个历史类 | 历史设备重定向方案；当前 Mixin JSON 没有注册它们；仅注册客户端 VoiceKillActionBarMixin 做自有提示换行 |
 
 ## 语音与规则链路
 
 ```text
-客户端 AudioCapture → PCM 格式转换 → CaptureSession → Zipformer（默认）/ Vosk（兼容）
+客户端 AudioCapture → PCM 格式转换 → CaptureSession → NaturalSpeechDecoder（Silero 边界 + 同一 Zipformer 双语流）
+  或原 Zipformer 端点 / Vosk（兼容）
   → EnhancedDecoder（可选：句末音频复核 + 展示用标点）
   → 带事件 ID / 候选来源标记的 SpeechPacket → Shriek PlayerSpeakPacket
   → 服务端 ServerPlayerTalkEvent → SpeechHandler（切回服务端线程）
   → SpeechWindow + WordMatcher → 词频 / 命中证据 / 处决
 
-服务端 tick → 换词与快照 → HudStatePayload → 客户端 HUD
+服务端 tick → 换词与快照 → HudStatePayload + 可选 RecognitionLexiconPayload → 客户端 HUD / 词表提示
 网页 console.html → HTTP API → 管理器操作入口 → 服务端任务
 ```
 
@@ -87,8 +91,8 @@ Java 包名仍为 `com.example.voicekill`。网页是资源中的单文件 HTML/
 | `intervalSeconds` | 30 |
 | `smartPick` / `smartPickChance` | true / 70 |
 | `speechEngine` / `speechThreads` | zipformer / 1 |
-| `speechContextHints` / `speechEndpointSilenceSeconds` | true / 0.35（短段仍至少 0.6 秒） |
-| `speechMaxUtteranceSeconds` | 5（Zipformer/Vosk 的连续讲话结算上限，非端到端处决时间） |
+| `speechContextHints` / `speechEndpointSilenceSeconds` | true / 0.6 |
+| `speechMaxUtteranceSeconds` | 10（Zipformer/Vosk 的连续讲话结算上限，非端到端处决时间） |
 | `allowVoskFallback` | true，界面会提示实际引擎与回退原因 |
 | `voskModel` | vosk-model-small-cn-0.22 |
 | `audioDevice` | 空字符串（系统默认），完整设备名优先 |
@@ -117,7 +121,7 @@ Java 包名仍为 `com.example.voicekill`。网页是资源中的单文件 HTML/
 | `/api/board/reset` | 清空死亡榜 |
 | `/api/debug/match` | 安全预览匹配，不统计词频、不处决；网页默认入口 |
 | `/api/debug/speech` | 历史完整模拟：选第一位在线玩家，命中会处决 |
-| `/api/mixin/toggle` | 历史开关文件，当前空 Mixin 注册下不启用历史实现 |
+| `/api/mixin/toggle` | 历史开关文件，不启用历史设备重定向实现 |
 
 ## 开发与排查
 
@@ -130,7 +134,7 @@ Java 包名仍为 `com.example.voicekill`。网页是资源中的单文件 HTML/
 
 第二条为手动工具，输出 `docs/shriek-javap.txt`，已忽略。
 开发游戏入口仍为 `runClient` / `runServer`。设置 `game_mods_dir` 后普通 `build` 会删除目标中的旧 JAR 并部署；验证时明确跳过部署。
-本机 Windows 的两套 native 模型已通过实际音频回放；真实设备、Mac native 加载、Minecraft F8 窗口及联机尚未验证。
+本机 Windows 的两套 native 模型已通过实际音频回放；真实设备、Mac native 加载、多人联机尚未验证；dev.7 在独立 Minecraft 实例检查 F7、HUD 预览及实际 20 词换轮提示。
 模型选择、配置和回放结果见 [识别模型说明](ASR_MODELS.md)；音频回放不是麦克风或游戏接受证据。
 
 ## 合并来源与验证边界
@@ -149,3 +153,13 @@ Java 包名仍为 `com.example.voicekill`。网页是资源中的单文件 HTML/
 后处理模型在 daemon 线程下载、验证及加载；麦克风仍可使用基础模型。退出期间会中断加载并释放迟到的模型，同一缓存目录串行准备。网页 `/api/audio` 的 `postprocess` 显示模型状态、最近原文/复核/标点文本、耗时与错误。所有音频只在本地处理。
 
 当前默认断句参数及指定输入设备修复见 [dev.6 验证](DEV6_VALIDATION.md)；dev.5 节保留当时的 5 秒配置记录。
+
+## dev.7 边界、优先级与显示分离
+
+`NaturalSpeechDecoder` 将 PCM 同时送入 Silero VAD 与同一个 Zipformer 预览流。VAD 确认声学停顿或达到兜底上限后，冲刷这一条流并结算；不会把分段音频裁剪后重新识别为另一条流。带时间戳环形缓存仅提供对应整段音频给句末复核；临时假设经 `SpeechTranscript` 显示，只有最终候选进入发包。词表变化清理旧段，连续讲话 watchdog 不随词表变化无限重置。
+
+`RecognitionLexiconPayload` 是单独的可选 S2C 通道，发送本轮原词和优先标记，不带别名；发送前确认客户端支持。旧 HUD 包不变。客户端仅接受与当前 HUD 原词一致的元数据；不支持此通道时使用原字母提示。优先词保持已有字母提示最高强度 1.5，其他字母词降到 0.75，优先长中文词为 0.5；不偏置单字/短中文词。
+
+`WordMatcher.ordered/prefer` 在既有命中中按证据强度、优先标记、完整词长度选择，`SpeechWindow` 比较所有互斥候选而不是首个命中立即返回。既有 fuzzy eligibility 仍按原 source 决定，不因优先标记而扩张。
+
+`ModSettingsScreen/ClientSettings` 使用独立草稿和客户端字段白名单，本地游戏规则排至服务端线程，不覆盖远程服务器规则或新选设备。`SpeechHighlight` 只做字面颜色映射，`HudPlacement` 负责比例布局/边界；自有 actionbar Mixin 将 VoiceKill 换词提示交给 `HotbarHint` 换行。详细使用见 [dev.7 设置](DEV7_SETTINGS.md)。

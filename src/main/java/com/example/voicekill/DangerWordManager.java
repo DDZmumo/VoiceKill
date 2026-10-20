@@ -179,9 +179,11 @@ public final class DangerWordManager {
                 config.intervalSeconds,
                 deathBoard.top(5),
                 deathBoard.total());
+        var lexicon=com.example.voicekill.network.RecognitionLexiconPayload.of(matchingWords());
         for (ServerPlayer player : players) {
             try {
                 ServerPlayNetworking.send(player, payload);
+                if(ServerPlayNetworking.canSend(player,com.example.voicekill.network.RecognitionLexiconPayload.TYPE))ServerPlayNetworking.send(player,lexicon);
             } catch (Throwable ignored) {
                 // 客户端没装本模组 / 通道没注册时不要炸 tick
             }
@@ -394,8 +396,12 @@ public final class DangerWordManager {
      * @return 命中的那个词；没命中返回 null
      */
     public List<com.example.voicekill.speech.WordMatcher.Word> matchingWords() {
+        Set<String> preferred = new HashSet<>();
+        config.dangerWords.forEach(word -> preferred.add(normalize(word)));
+        config.nameWords.forEach(word -> preferred.add(normalize(word)));
         return currentWords.stream().map(slot -> new com.example.voicekill.speech.WordMatcher.Word(
-                slot.word(), slot.source(), slot.aliases())).toList();
+                slot.word(), slot.source(), slot.aliases(), preferred.contains(normalize(slot.word()))
+                    || "manual".equals(slot.source()) || "name".equals(slot.source()))).toList();
     }
 
     public String match(String speechText) {
