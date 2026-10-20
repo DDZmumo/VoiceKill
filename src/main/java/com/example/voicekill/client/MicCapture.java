@@ -32,8 +32,10 @@ public final class MicCapture {
     private static volatile boolean attempted;
     private static volatile List<String> recognitionWords = List.of();
     private static volatile List<com.example.voicekill.speech.WordMatcher.Word> recognitionVocabulary=List.of();
+    private static volatile RoundTrackingDecoder.Context roundContext=RoundTrackingDecoder.Context.empty();
 
     public static void updateRecognitionWords(List<String> words) {
+        if(!roundContext.session().isEmpty())return; // v2 context and vocabulary arrive atomically below.
         List<String> current=List.copyOf(words);
         if(!current.equals(recognitionWords))recognitionVocabulary=List.of();
         recognitionWords=current;
@@ -44,6 +46,12 @@ public final class MicCapture {
         for(int i=0;i<words.size();i++)result.add(new com.example.voicekill.speech.WordMatcher.Word(words.get(i),preferred.get(i)?"manual":"random",List.of(),preferred.get(i)));
         recognitionVocabulary=List.copyOf(result);
     }
+    public static void updateRecognitionRound(com.example.voicekill.network.RecognitionLexiconPayload payload) {
+        recognitionWords=List.copyOf(payload.words());
+        updateRecognitionVocabulary(payload.words(),payload.preferred());
+        roundContext=new RoundTrackingDecoder.Context(payload.session(),payload.round(),payload.running());
+    }
+    public static void disconnected(){roundContext=RoundTrackingDecoder.Context.empty();recognitionWords=List.of();recognitionVocabulary=List.of();SpeechTranscript.clear();}
     private static String hints() {
         var vocabulary=recognitionVocabulary;
         return vocabulary.isEmpty()?RecognitionHints.encode(recognitionWords):RecognitionHints.encodePriority(vocabulary);
@@ -85,6 +93,7 @@ public final class MicCapture {
             if (config == null) throw new IllegalStateException("配置尚未加载");
             state = "model";
             decoder = createDecoder(config);
+            decoder = new RoundTrackingDecoder(decoder,()->roundContext);
             decoder = enhance(decoder, config);
             state = "opening";
             source = AudioCapture.open(device);
@@ -92,7 +101,7 @@ public final class MicCapture {
             final long token = ++generation;
             final CaptureSession.Decoder activeDecoder = decoder;
             session = new CaptureSession(source, decoder, candidates -> {
-                String packet = SpeechPacket.encode(candidates, activeDecoder.literalCandidates(),activeDecoder.reviewConfirmed());
+                String packet = SpeechPacket.encode(candidates, activeDecoder.literalCandidates(),activeDecoder.reviewConfirmed(),activeDecoder.rounds());
                 if (config.logSpeech && activeDecoder instanceof EnhancedDecoder post)
                     VoiceKillMod.LOGGER.info("[VoiceKill] 句末处理：{}", post.snapshot());
                 Minecraft client = Minecraft.getInstance();
@@ -298,6 +307,7 @@ public final class MicCapture {
             closed = true;
             closeNative(recognizer); closeNative(model);
         }
+        @Override public void discard() throws Exception {reset.invoke(recognizer);budget.reset();boundary=CaptureSession.Boundary.DISCARD;}
         private static void closeNative(Object resource) {
             if (resource == null) return;
             try { resource.getClass().getMethod("close").invoke(resource); }

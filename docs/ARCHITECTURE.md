@@ -1,6 +1,6 @@
 # 项目结构与运行机制
 
-依据 2026-10-20 的 1.0.15-dev.7 源码；历史交接资料来自 1.0.14。
+依据 2026-10-20 的 1.0.15-dev.10 源码；历史交接资料来自 1.0.14。
 实际修复和验证边界见 [修复与验收说明](FIXES_AND_VALIDATION.md)。
 
 ## 目录约定
@@ -39,6 +39,7 @@ Java 包名仍为 `com.example.voicekill`。网页是资源中的单文件 HTML/
 | `speech/SpeechStats.java` | 中文 2～4 字 n-gram、英文词计数与统计筛选 |
 | `speech/SpeechPacket.java` | Shriek 文本通道中的编号事件封装；兼容旧纯文本，最多 3 个候选 |
 | `speech/SpeechWindow.java` | 按玩家隔离的断句历史、候选分支和事件 ID 去重 |
+| `speech/RoundSpeechWindow.java` | 服务端词表快照、语句轮次范围、跨轮事件去重与后组优先；最多 32 组、历史保留约 60 秒 |
 | `speech/WordMatcher.java` | 精确、别名、逐字读音、有限编辑距离匹配及命中证据 |
 | `util/TextUtil.java` | 匹配用的小写及去空白归一化 |
 | `util/WordAliases.java` | 展示别名生成和无需展开笛卡尔积的读音规则 |
@@ -49,6 +50,7 @@ Java 包名仍为 `com.example.voicekill`。网页是资源中的单文件 HTML/
 | `client/ZipformerDecoder.java` | 有限束搜索、动态词表、自适应端点、段状态隔离与资源释放 |
 | `client/RecognitionHints.java` | 从本轮原词及优先标记构造字母/低强度长中文提示；不改匹配规则 |
 | `client/UtteranceBudget.java` | 两种引擎共用的连续讲话采样预算；空闲不计时、不依赖危险词内容 |
+| `client/RoundTrackingDecoder.java` | 在句末复核前按音频采样范围绑定词表编号；换轮保留音频，换会话/停止时清除 |
 | `client/EnhancedDecoder.java`、`client/PcmUtterance.java` | 有界保留段音频，后台加载可选模型，沿用原识别结算边界 |
 | `client/SentencePostprocessor.java`、`client/NativeSentenceModels.java` | 两次一致的音频复核、正文不变的标点展示与故障回退 |
 | `speech/ReviewMatcher.java` | 复核候选仅按当前段的字母词精确包含；中文部分必须有原始识别依据 |
@@ -66,10 +68,11 @@ Java 包名仍为 `com.example.voicekill`。网页是资源中的单文件 HTML/
 ```text
 客户端 AudioCapture → PCM 格式转换 → CaptureSession → NaturalSpeechDecoder（Silero 边界 + 同一 Zipformer 双语流）
   或原 Zipformer 端点 / Vosk（兼容）
+  → RoundTrackingDecoder（讲话音频的起止轮次）
   → EnhancedDecoder（可选：句末音频复核 + 展示用标点）
   → 带事件 ID / 候选来源标记的 SpeechPacket → Shriek PlayerSpeakPacket
   → 服务端 ServerPlayerTalkEvent → SpeechHandler（切回服务端线程）
-  → SpeechWindow + WordMatcher → 词频 / 命中证据 / 处决
+  → RoundSpeechWindow → 各轮 SpeechWindow + WordMatcher → 词频 / 命中证据 / 处决
 
 服务端 tick → 换词与快照 → HudStatePayload + 可选 RecognitionLexiconPayload → 客户端 HUD / 词表提示
 网页 console.html → HTTP API → 管理器操作入口 → 服务端任务
@@ -79,6 +82,7 @@ Java 包名仍为 `com.example.voicekill`。网页是资源中的单文件 HTML/
 新事件按 UUID 去重，重复文字不去重；旧客户端的自身去重行为仍需升级客户端才能修复。
 同一句候选互斥，只有不同事件才能拼接；窗口 5 秒、每条路径尾部最多 64 字，最多 32 条路径。
 命中必须包含本次新片段，不能仅命中旧尾巴。当前词更新时清理窗口，断开或处决时清理该玩家。
+跨轮仅保留词表快照，先前语句的拼接残片仍清除。同句按起止轮次范围由新到旧检查，新组命中直接优先；该句结束后才出现的轮次不参与。词组编号由服务端产生，客户端不上传自选词组；无轮次元数据的旧文本仅按当前轮处理。重新开始生成新会话编号，停止时清空所有旧快照。
 单字只接受最优候选，中文单字不自动生成谐音；显式配置别名仍可匹配最优候选。
 人名/手动长词保留编辑距离容错和逐字同音匹配；英文及中英混合词按位置匹配字母读音。
 
@@ -156,7 +160,7 @@ Java 包名仍为 `com.example.voicekill`。网页是资源中的单文件 HTML/
 
 ## dev.7 边界、优先级与显示分离
 
-`NaturalSpeechDecoder` 将 PCM 同时送入 Silero VAD 与同一个 Zipformer 预览流。VAD 确认声学停顿或达到兜底上限后，冲刷这一条流并结算；不会把分段音频裁剪后重新识别为另一条流。带时间戳环形缓存仅提供对应整段音频给句末复核；临时假设经 `SpeechTranscript` 显示，只有最终候选进入发包。词表变化清理旧段，连续讲话 watchdog 不随词表变化无限重置。
+`NaturalSpeechDecoder` 将 PCM 同时送入 Silero VAD 与同一个 Zipformer 预览流。VAD 确认声学停顿或达到兜底上限后，冲刷这一条流并结算；不会把分段音频裁剪后重新识别为另一条流。带时间戳环形缓存提供对应整段音频给句末复核；临时假设经 `SpeechTranscript` 显示，只有最终候选进入发包。换词不重置语句、VAD 或 watchdog，新提示用于下一识别流；停止/重新开始、断线或切服仍清理旧音频。`RoundTrackingDecoder` 在音频时间线上保留词表编号，按 Silero 语音段及首尾能量定位选择适用范围，先绑定范围再进入句末复核。S2C `recognition_lexicon_v2` 原子发送词表、优先标记、会话编号、轮次编号和运行状态；C2S 沿用 Shriek 文本通道的 `R=起轮UUID,止轮UUID` 元数据。
 
 `RecognitionLexiconPayload` 是单独的可选 S2C 通道，发送本轮原词和优先标记，不带别名；发送前确认客户端支持。旧 HUD 包不变。客户端仅接受与当前 HUD 原词一致的元数据；不支持此通道时使用原字母提示。优先词保持已有字母提示最高强度 1.5，其他字母词降到 0.75，优先长中文词为 0.5；不偏置单字/短中文词。
 

@@ -48,9 +48,9 @@ public class VoiceKillClient implements ClientModInitializer {
                     MicCapture.updateRecognitionWords(payload.words());
                 }));
         ClientPlayNetworking.registerGlobalReceiver(com.example.voicekill.network.RecognitionLexiconPayload.TYPE,(payload,context)->
-                context.client().execute(()->MicCapture.updateRecognitionVocabulary(payload.words(),payload.preferred())));
+                context.client().execute(()->MicCapture.updateRecognitionRound(payload)));
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
-            MicCapture.updateRecognitionWords(java.util.List.of());SpeechTranscript.clear();HotbarHint.clear();
+            MicCapture.disconnected();HotbarHint.clear();
         });
 
         // 2) 注册四角常驻显示

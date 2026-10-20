@@ -58,6 +58,8 @@ public final class DangerWordManager {
     private int ticksElapsed;
     private final List<Map<String, Object>> history = new ArrayList<>();
     private MinecraftServer lastServer;
+    private String recognitionSession=java.util.UUID.randomUUID().toString();
+    private String recognitionRound;
 
     /** 是否已经 /voicekill start 开始游戏 */
     private boolean running = false;
@@ -69,7 +71,7 @@ public final class DangerWordManager {
 
     private void updateWords(List<WordSlot> words) {
         currentWords = List.copyOf(words);
-        SpeechHandler.reset();
+        recognitionRound=SpeechHandler.changeWords(matchingWords());
         previewWindow.clear();
         speechPreview = Map.of();
     }
@@ -138,6 +140,7 @@ public final class DangerWordManager {
 
     /** /voicekill start：清空本周期统计，重新组一组词，开始计时 */
     public void start(MinecraftServer server) {
+        SpeechHandler.reset();recognitionSession=java.util.UUID.randomUUID().toString();
         this.running = true;
         this.nextWords = List.of();
         this.history.clear();
@@ -179,7 +182,7 @@ public final class DangerWordManager {
                 config.intervalSeconds,
                 deathBoard.top(5),
                 deathBoard.total());
-        var lexicon=com.example.voicekill.network.RecognitionLexiconPayload.of(matchingWords());
+        var lexicon=com.example.voicekill.network.RecognitionLexiconPayload.of(matchingWords(),recognitionSession,recognitionRound,running);
         for (ServerPlayer player : players) {
             try {
                 ServerPlayNetworking.send(player, payload);

@@ -22,14 +22,14 @@ public final class ReviewedReplayCheck {
                 if(!row.getAsJsonObject("clip").get("sha256").equals(baselineRows.get(id).getAsJsonObject("clip").get("sha256")))throw new AssertionError("WAV changed");
                 Set<String> previous=baselineRows.get(id).getAsJsonObject("hits").keySet();var current=new HashSet<String>();
                 for(var word:words) {
-                    var window=new SpeechWindow();
+                    var window=new RoundSpeechWindow();window.rotate(List.of(word),100000);
                     for(var value:row.getAsJsonArray("events")) {
                         var event=value.getAsJsonObject();var candidates=new ArrayList<String>();for(var c:event.getAsJsonArray("candidates"))candidates.add(c.getAsString());
                         boolean accepted=event.has("postprocess")&&event.getAsJsonObject("postprocess").has("latest")&&event.getAsJsonObject("postprocess").getAsJsonObject("latest").get("accepted").getAsBoolean();
                         boolean confirmed=accepted||event.has("reviewConfirmed")&&event.get("reviewConfirmed").getAsBoolean()||event.has("postprocess")&&event.getAsJsonObject("postprocess").has("latest")&&event.getAsJsonObject("postprocess").getAsJsonObject("latest").get("reason").getAsString().equals("unchanged");
                         var packet=SpeechPacket.parse(SpeechPacket.encode(candidates,accepted?Set.of(candidates.size()-1):Set.of(),confirmed));
                         long now=100000+Math.round(event.get(report.get("realtime").getAsBoolean()?"wallMs":"audioMs").getAsDouble());
-                        if(window.accept("p",packet,List.of(word),now).hit()!=null){current.add(word.text());break;}
+                        if(window.accept("p",packet,now).hit()!=null){current.add(word.text());break;}
                     }
                 }
                 for(String word:current)if(expected.contains(word))hits++;else {falseHits++;if(!previous.contains(word))newFalse.add(id+":"+word);}
@@ -38,7 +38,8 @@ public final class ReviewedReplayCheck {
             var summary=new LinkedHashMap<String,Object>();summary.put("group",name);summary.put("hits",hits);summary.put("falseHits",falseHits);summary.put("lost",losses);summary.put("newFalse",newFalse);summary.put("removedFalse",removedFalse);summaries.add(summary);
             if(!newFalse.isEmpty())throw new AssertionError(gson.toJson(summary));
         }
-        Files.createDirectories(Path.of(".local/diagnostics/dev9"));Files.writeString(Path.of(".local/diagnostics/dev9/reviewed-events.json"),gson.toJson(summaries));
+        Path output=Path.of(args.length>1?args[1]:input).resolve("reviewed-events.json");
+        Files.createDirectories(output.getParent());Files.writeString(output,gson.toJson(summaries));
         System.out.println(gson.toJson(summaries));
     }
 }

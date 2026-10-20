@@ -135,14 +135,7 @@ public final class ZipformerDecoder implements CaptureSession.Decoder {
 
     @Override public List<String> accept(byte[] bytes) {
         boundary=CaptureSession.Boundary.NONE;
-        String requestedHints = hints();
-        if (!requestedHints.equals(activeHints)) {
-            // 换轮/切服时丢弃未完成的旧段，旧词表不能继续影响下一轮识别。
-            OnlineStream next = createStream(requestedHints);
-            stream.release(); stream = next; activeHints = requestedHints;
-            budget.reset(); hasHypothesis = false;
-            epoch++;
-        }
+        // Refresh hints only after this sentence ends, never by discarding its audio.
         stream.acceptWaveform(pcmSamples(bytes), 16000);
         boolean decoded = false;
         while (recognizer.isReady(stream)) { recognizer.decode(stream); decoded = true; }
@@ -179,4 +172,5 @@ public final class ZipformerDecoder implements CaptureSession.Decoder {
         closed = true;
         try { stream.release(); } finally { recognizer.release(); }
     }
+    @Override public void discard(){resetPreview();budget.reset();hasHypothesis=false;boundary=CaptureSession.Boundary.DISCARD;epoch++;}
 }

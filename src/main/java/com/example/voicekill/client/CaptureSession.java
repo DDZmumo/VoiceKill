@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class CaptureSession {
     public static final int FRAME_BYTES = 1280; // 40ms @ 16kHz mono PCM16
     public enum Boundary { NONE, IDLE, DISCARD, FINAL }
+    public record SampleRange(long start,long end) {}
     public interface Source extends AutoCloseable {
         int read(byte[] bytes) throws Exception;
         @Override void close();
@@ -17,6 +18,9 @@ public final class CaptureSession {
         List<String> accept(byte[] bytes) throws Exception;
         default Boundary boundary() { return Boundary.NONE; }
         default long epoch() { return 0; }
+        default void discard() throws Exception {}
+        default SampleRange utteranceRange(){return null;}
+        default com.example.voicekill.speech.SpeechPacket.RoundSpan rounds(){return null;}
         default java.util.Set<Integer> literalCandidates() { return java.util.Set.of(); }
         default float[] utteranceSamples() { return null; }
         default boolean reviewConfirmed(){return false;}

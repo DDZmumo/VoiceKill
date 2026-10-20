@@ -118,6 +118,7 @@ public final class NicknameReplay {
                 : engine.equals("sensevoice") ? new SenseVoiceDecoder(model,1,.35f)
                 : (engine.equals("natural")||engine.equals("priority")) ? new NaturalSpeechDecoder(model,Path.of(".local/models/sensevoice-int8/silero_vad.onnx"),1,()->targets,replaySettings,engine.equals("priority")?()->RecognitionHints.encodePriority(evaluationWords):null)
                 : new ZipformerDecoder(model, 1, () -> targets, replaySettings);
+        nativeDecoder=new RoundTrackingDecoder(nativeDecoder,RoundTrackingDecoder.Context::empty);
         if(engine.equals("enhanced")||(engine.equals("natural")||engine.equals("priority"))) {
             var post=new SentencePostprocessor(new SentencePostprocessor.Reviewer() {
                 public String recognize(float[] audio) throws Exception{return sharedReviewer.recognize(audio);}

@@ -10,25 +10,22 @@ import java.util.function.Supplier;
 public final class NaturalSpeechDecoder implements CaptureSession.Decoder {
     private final ZipformerDecoder transcriber;
     private final Vad vad;
-    private final Supplier<List<String>> words;
-    private List<String> vocabulary;
     private final float[] frame=new float[512];
     private final float[] history;
     private final UtteranceBudget watchdog;
     private long totalSamples,epoch;
     private int used;
     private int idleSamples;
-    private long epochSamples;
     private boolean closed;
     private volatile String partial="";
     private float[] finalized;
+    private CaptureSession.SampleRange range;
     private CaptureSession.Boundary boundary=CaptureSession.Boundary.NONE;
 
     public NaturalSpeechDecoder(Path model,Path vadModel,int threads,Supplier<List<String>> words,ZipformerDecoder.Settings settings) {
         this(model,vadModel,threads,words,settings,null);
     }
     public NaturalSpeechDecoder(Path model,Path vadModel,int threads,Supplier<List<String>> words,ZipformerDecoder.Settings settings,Supplier<String> hintOverride) {
-        this.words=words;this.vocabulary=List.copyOf(words.get());
         history=new float[(int)((settings.maxUtteranceSeconds()+5)*16000)];
         watchdog=new UtteranceBudget(settings.maxUtteranceSeconds());
         transcriber=new ZipformerDecoder(model,threads,words,settings,hintOverride);
@@ -42,15 +39,8 @@ public final class NaturalSpeechDecoder implements CaptureSession.Decoder {
 
     @Override public List<String> accept(byte[] pcm) {
         if(closed)throw new IllegalStateException("语音会话已关闭");
-        boundary=CaptureSession.Boundary.NONE;finalized=null;
-        List<String> current=List.copyOf(words.get());
-        if(!current.equals(vocabulary)) {
-            // 换轮/切服时保留原有隔离规则：旧段不得影响新词表。
-            vad.reset();totalSamples=0;used=0;idleSamples=0;epochSamples=0;vocabulary=current;epoch++;
-            transcriber.resetPreview();partial="";
-        }
+        boundary=CaptureSession.Boundary.NONE;finalized=null;range=null;
         float[] samples=AudioCapture.pcmSamples(pcm);
-        epochSamples+=samples.length;
         for(float sample:samples)history[(int)(totalSamples++%history.length)]=sample;
         String hypothesis=transcriber.preview(pcm);
         for(int offset=0;offset<samples.length;) {
@@ -59,8 +49,8 @@ public final class NaturalSpeechDecoder implements CaptureSession.Decoder {
             if(used==frame.length){vad.acceptWaveform(Arrays.copyOf(frame,frame.length));used=0;}
         }
         partial=vad.isSpeechDetected()?hypothesis:"";
-        // 词表切换不能无限重置持续讲话兜底。至少保留当前词表的一秒上下文再强制结算。
-        if(watchdog.advance(samples.length,vad.isSpeechDetected())&&vad.isSpeechDetected()&&epochSamples>=16000)vad.flush();
+        // Word changes only update hints on the next stream; the active sentence and budget survive.
+        if(watchdog.advance(samples.length,vad.isSpeechDetected())&&vad.isSpeechDetected())vad.flush();
         if(vad.empty()) {
             if(!vad.isSpeechDetected()) {
                 boundary=CaptureSession.Boundary.IDLE;
@@ -75,6 +65,9 @@ public final class NaturalSpeechDecoder implements CaptureSession.Decoder {
             return List.of();
         }
         var segment=vad.front();
+        float[] spoken=segment.getSamples();int first=-1,last=0;
+        for(int i=0;i<spoken.length;i+=160){int stop=Math.min(spoken.length,i+160);double energy=0;for(int j=i;j<stop;j++)energy+=(double)spoken[j]*spoken[j];if(energy/(stop-i)>1e-5){if(first<0)first=i;last=stop;}}
+        range=new CaptureSession.SampleRange((long)segment.getStart()+Math.max(0,first),(long)segment.getStart()+(first<0?spoken.length:last));
         long start=Math.max(0,(long)segment.getStart()-4000);
         long end=Math.min(totalSamples,(long)segment.getStart()+segment.getSamples().length+4000);
         if(start<totalSamples-history.length)throw new IllegalStateException("自然语音段超出缓存上限");
@@ -85,7 +78,7 @@ public final class NaturalSpeechDecoder implements CaptureSession.Decoder {
         List<String> result=transcriber.finishPreview();
         transcriber.resetPreview();
         transcriber.seedPreview(slice(Math.max(0,consumed),totalSamples));
-        partial="";idleSamples=0;epochSamples=0;watchdog.reset();
+        partial="";idleSamples=0;watchdog.reset();
         boundary=result.isEmpty()?CaptureSession.Boundary.DISCARD:CaptureSession.Boundary.FINAL;
         return result;
     }
@@ -96,6 +89,8 @@ public final class NaturalSpeechDecoder implements CaptureSession.Decoder {
         return result;
     }
     @Override public float[] utteranceSamples(){return finalized;}
+    @Override public CaptureSession.SampleRange utteranceRange(){return range;}
+    @Override public void discard(){vad.reset();totalSamples=0;used=0;idleSamples=0;watchdog.reset();transcriber.resetPreview();partial="";finalized=null;range=null;boundary=CaptureSession.Boundary.DISCARD;epoch++;}
     @Override public String partial(){return partial;}
     @Override public long epoch(){return epoch;}
     @Override public CaptureSession.Boundary boundary(){return boundary;}

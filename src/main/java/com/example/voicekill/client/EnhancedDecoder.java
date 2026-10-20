@@ -69,6 +69,8 @@ public final class EnhancedDecoder implements CaptureSession.Decoder {
     @Override public boolean reviewConfirmed(){return latest!=null&&(latest.accepted()||latest.reason().equals("unchanged"));}
     @Override public String displayFinal(List<String> candidates){return latest==null?base.displayFinal(candidates):com.example.voicekill.speech.GameTerms.display(latest.raw(),latest.punctuated(),reviewConfirmed());}
     @Override public long epoch(){return base.epoch();}
+    @Override public com.example.voicekill.speech.SpeechPacket.RoundSpan rounds(){return base.rounds();}
+    @Override public void discard() throws Exception {base.discard();audio.clear();latest=null;literalCandidates=Set.of();epoch=base.epoch();}
     @Override public void close() {
         SentencePostprocessor current;
         synchronized(lock){if(closed)return;closed=true;state="closed";current=post;post=null;}

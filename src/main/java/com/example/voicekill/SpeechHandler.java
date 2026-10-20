@@ -20,10 +20,11 @@ public final class SpeechHandler {
 
     private static boolean registered = false;
 
-    private static final com.example.voicekill.speech.SpeechWindow WINDOW = new com.example.voicekill.speech.SpeechWindow();
+    private static final com.example.voicekill.speech.RoundSpeechWindow WINDOW = new com.example.voicekill.speech.RoundSpeechWindow();
     private static final java.util.Map<String, Long> LAST_MOJIBAKE_WARN = new java.util.HashMap<>();
 
     public static void reset() { WINDOW.clear(); LAST_MOJIBAKE_WARN.clear(); }
+    public static String changeWords(java.util.List<com.example.voicekill.speech.WordMatcher.Word> words){return WINDOW.rotate(words,System.currentTimeMillis());}
     public static void forget(ServerPlayer player) { WINDOW.forget(player.getUUID().toString()); }
 
     private SpeechHandler() {
@@ -76,8 +77,8 @@ public final class SpeechHandler {
         String rawText = packet.candidates().getFirst();
         String text = com.example.voicekill.speech.GameTerms.display(rawText,packet.finalText(),packet.reviewConfirmed());
         String speaker = player == null ? "simulation" : player.getUUID().toString();
-        var result = WINDOW.accept(speaker, packet, manager.matchingWords(), System.currentTimeMillis());
-        if (result.duplicate()) return;
+        var result = WINDOW.accept(speaker, packet, System.currentTimeMillis());
+        if (result.duplicate()||result.stale()) return;
         warnIfMojibake(speaker, text);
         manager.stats().record(text);
         ModConfig config = ModConfig.get();
