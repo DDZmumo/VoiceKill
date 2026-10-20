@@ -24,17 +24,26 @@ public final class SpeechWindow {
         State state = speakers.computeIfAbsent(speaker, ignored -> new State());
         if (packet.eventId() != null && !state.events.add(packet.eventId())) return new Result(null, -1, true);
         while (state.events.size() > 64) state.events.remove(state.events.iterator().next());
+        WordMatcher.Hit found=null;int foundCandidate=-1;
+        boolean reviewed=!packet.literalCandidates().isEmpty();
+        if(reviewed) {
+            boolean rawSupported=false;String primary=TextUtil.normalize(packet.candidates().getFirst());
+            for(int index:packet.literalCandidates()) {
+                String sentence=packet.candidates().get(index);
+                var hit=ReviewMatcher.find(words,sentence,packet.candidates().getFirst());
+                if(WordMatcher.prefer(hit,found,words)){found=hit;foundCandidate=index;}
+                if(TextUtil.normalize(sentence).contains(primary))rawSupported=true;
+            }
+            // Withdraw contradicted raw text and its history. Only fully corroborated raw
+            // fragments may continue the existing long-name window; review text is never joined.
+            if(!rawSupported){state.at=now;state.tails=List.of();return new Result(found,foundCandidate,false);}
+        }
+        List<WordMatcher.Word> stitchable=words.stream().filter(word->!"highfreq".equals(word.source())&&!"smart".equals(word.source())).toList();
         List<Path> old = now - state.at <= 5_000 ? state.tails : List.of();
         state.at = now;
-        WordMatcher.Hit found = null;
-        int foundCandidate = -1;
         Map<String, Path> next = new LinkedHashMap<>();
         for (int i = 0; i < packet.candidates().size(); i++) {
-            if(packet.literalCandidates().contains(i)) {
-                var reviewed=ReviewMatcher.find(words,packet.candidates().get(i),packet.candidates().getFirst());
-                if(WordMatcher.prefer(reviewed,found,words)){found=reviewed;foundCandidate=i;}
-                continue;
-            }
+            if(reviewed&&i!=0)continue;
             String fresh = TextUtil.normalize(packet.candidates().get(i));
             boolean secondary = i != 0;
             WordMatcher.Hit hit = WordMatcher.find(words, fresh, secondary, 0);
@@ -43,7 +52,7 @@ public final class SpeechWindow {
             for (Path tail : old) {
                 String joined = tail.text() + fresh;
                 boolean branchSecondary = secondary || tail.secondary();
-                hit = WordMatcher.find(words, joined, branchSecondary, tail.text().length());
+                hit = WordMatcher.find(stitchable, joined, branchSecondary, tail.text().length());
                 if (WordMatcher.prefer(hit,found,words)) { found = hit; foundCandidate = i; }
                 addTail(next, new Path(joined, branchSecondary));
             }

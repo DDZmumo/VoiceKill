@@ -4,7 +4,7 @@ import com.example.voicekill.util.TextUtil;
 import java.util.ArrayList;
 import java.util.List;
 
-/** 句末音频复核与文字标点分离；原始首候选始终保留，不向识别模型提供危险词。 */
+/** 句末音频复核与文字标点分离；原始首候选保留作依据/原文；接受的复核句用于判定，不向复核模型提供危险词。 */
 public final class SentencePostprocessor implements AutoCloseable {
     public interface Reviewer extends AutoCloseable {
         String recognize(float[] audio) throws Exception;
@@ -78,7 +78,6 @@ public final class SentencePostprocessor implements AutoCloseable {
         if(a.length()>512)return "too-long";
         if(raw.stream().anyMatch(text->TextUtil.normalize(text).equals(a)))return "unchanged";
         if(raw.size()>=3)return "candidate-limit";
-        if(!a.matches(".*[a-z].*"))return "no-latin-review";
         int prior=letters(original),next=letters(a);
         if(prior!=0&&(prior&next)==0)return "conflicting-letters";
         return "accepted";

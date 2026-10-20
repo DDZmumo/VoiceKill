@@ -97,7 +97,8 @@ def main():
     copy(ROOT / 'docs/INSTALL_DEV7.md', '安装教程.md')
     (dest / '安装教程.txt').write_text((ROOT / 'docs/INSTALL_DEV7.md').read_text(encoding='utf-8'), encoding='utf-8-sig')
     copy(ROOT / 'docs/DEV7_SETTINGS.md', '设置详解.md')
-    copy(ROOT / 'docs/DEV7_VALIDATION.md', '验证记录.md')
+    validation = ROOT / 'docs' / ('DEV' + version.rsplit('dev.', 1)[-1] + '_VALIDATION.md')
+    copy(validation if validation.exists() else ROOT / 'docs/DEV7_VALIDATION.md', '验证记录.md')
     commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
     (dest / 'manifest.json').write_text(json.dumps(dict(version=version, minecraft='1.21.11', sourceCommit=commit,
                                                        containsVoskModel=False, files=files), ensure_ascii=False, indent=2), encoding='utf-8')

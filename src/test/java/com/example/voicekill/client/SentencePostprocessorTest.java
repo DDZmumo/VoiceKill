@@ -9,8 +9,8 @@ class SentencePostprocessorTest {
         assertEquals(List.of("TV Q","q a q"),SentencePostprocessor.candidates(List.of("TV Q"),"q a q","qaq"));
         assertEquals(List.of("老板","P老板"),SentencePostprocessor.candidates(List.of("老板"),"P老板","p 老板"));
     }
-    @Test void chineseRewritesAndContradictoryLettersCannotCreateNewPunishments() {
-        assertEquals(List.of("才"),SentencePostprocessor.candidates(List.of("才"),"干","干"));
+    @Test void stableChineseIsTaggedAndContradictoryLettersAreRejected() {
+        assertEquals(List.of("才","干"),SentencePostprocessor.candidates(List.of("才"),"干","干"));
         assertEquals(List.of("D站"),SentencePostprocessor.candidates(List.of("D站"),"B站","b站"));
         assertEquals(List.of("豆腐Q汤宝宝"),SentencePostprocessor.candidates(List.of("豆腐Q汤宝宝"),"豆腐汤宝宝P","豆腐汤宝宝p"));
     }

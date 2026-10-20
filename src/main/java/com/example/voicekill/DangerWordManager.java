@@ -324,7 +324,7 @@ public final class DangerWordManager {
         if (trimmed.isEmpty()) return false;
         if (!used.add(normalize(trimmed))) return false;
         // 谐音变体在这里算一次并缓存，匹配时不用反复生成
-        target.add(new WordSlot(trimmed, source, WordAliases.variants(trimmed, config)));
+        target.add(new WordSlot(trimmed, source, WordAliases.variants(trimmed, config, !"highfreq".equals(source) && !"smart".equals(source))));
         return true;
     }
 

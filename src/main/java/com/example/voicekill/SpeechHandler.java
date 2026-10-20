@@ -73,7 +73,8 @@ public final class SpeechHandler {
         if (!manager.isRunning()) return;
         var packet = com.example.voicekill.speech.SpeechPacket.parse(rawPacketText);
         if (packet.candidates().isEmpty()) return;
-        String text = packet.candidates().getFirst();
+        String rawText = packet.candidates().getFirst();
+        String text = packet.finalText();
         String speaker = player == null ? "simulation" : player.getUUID().toString();
         var result = WINDOW.accept(speaker, packet, manager.matchingWords(), System.currentTimeMillis());
         if (result.duplicate()) return;
@@ -89,7 +90,7 @@ public final class SpeechHandler {
         VoiceKillMod.LOGGER.info("[VoiceKill] 命中「{}」：方式={}，证据「{}」，候选={}，最优文本「{}」",
                 hit.word(), hit.mode(), hit.evidence(), result.candidate() + 1, text);
         if (player != null) {
-            punish(manager, player, hit.word(), text);
+            punish(manager, player, hit.word(), rawText, text);
         }
     }
 
@@ -119,7 +120,7 @@ public final class SpeechHandler {
                 + "让他给 JVM 参数加 -Dfile.encoding=UTF-8 再启动游戏", who);
     }
 
-    private static void punish(DangerWordManager manager, ServerPlayer player, String matched, String rawText) {
+    private static void punish(DangerWordManager manager, ServerPlayer player, String matched, String rawText, String confirmedText) {
         if (player.isDeadOrDying()) {
             return;
         }
@@ -130,7 +131,7 @@ public final class SpeechHandler {
         ModConfig config=ModConfig.get();
         Component deathMessage=config!=null&&config.customDeathMessages
                 ? DeathMessages.render(DeathMessages.choose(DeathMessages.pool(config.deathMessageStyle,config.deathMessages),java.util.concurrent.ThreadLocalRandom.current()),player.getDisplayName(),matched):null;
-        announceKill(matched,player,rawText);
+        announceKill(matched,player,rawText,confirmedText);
 
         // 记一笔言多必失
         manager.recordDeath(player.getName().getString());
@@ -145,18 +146,23 @@ public final class SpeechHandler {
     }
 
     /** 在聊天栏告诉所有人谁踩雷了 */
-    private static void announceKill(String matched, ServerPlayer victim, String rawText) {
+    private static void announceKill(String matched, ServerPlayer victim, String rawText, String confirmedText) {
         MinecraftServer server = victim.level().getServer();
         if (server == null) {
             return;
         }
-        Component message = killNotice(matched,victim.getName().getString(),rawText);
+        Component message = killNotice(matched,victim.getName().getString(),rawText,confirmedText);
 
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             player.displayClientMessage(message, false);
         }
     }
     /** Keep the original transcript visible alongside the styled native death message. */
+    static Component killNotice(String matched,String victimName,String rawText,String confirmedText) {
+        var message=killNotice(matched,victimName,rawText).copy();
+        if(!rawText.equals(confirmedText))message.append(Component.literal("（复核："+confirmedText+"）").withStyle(ChatFormatting.GRAY));
+        return message;
+    }
     static Component killNotice(String matched,String victimName,String rawText) {
         return Component.literal("[VoiceKill] ")
                 .withStyle(ChatFormatting.DARK_RED, ChatFormatting.BOLD)

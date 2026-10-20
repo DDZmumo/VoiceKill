@@ -13,6 +13,11 @@ public record SpeechPacket(String eventId, List<String> candidates, Set<Integer>
         candidates=List.copyOf(candidates);literalCandidates=Set.copyOf(literalCandidates);
         for(int index:literalCandidates)if(index<1||index>=candidates.size())throw new IllegalArgumentException("无效复核候选索引");
     }
+    /** Accepted review is authoritative; primary remains available solely as original evidence. */
+    public String finalText() {
+        if(candidates.isEmpty())return "";
+        return candidates.get(literalCandidates.stream().min(Integer::compareTo).orElse(0));
+    }
     public static final String SEPARATOR = "\u0001";
     private static final String PREFIX = "[voicekill:2:";
 
