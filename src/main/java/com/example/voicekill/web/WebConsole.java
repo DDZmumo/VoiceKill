@@ -150,7 +150,9 @@ public final class WebConsole {
                 Float timeout=body.has("silenceTimeoutSeconds")?body.get("silenceTimeoutSeconds").getAsFloat():null;
                 Float damage=body.has("silenceDamageAmount")?body.get("silenceDamageAmount").getAsFloat():null;
                 Float damageInterval=body.has("silenceDamageIntervalSeconds")?body.get("silenceDamageIntervalSeconds").getAsFloat():null;
-                manager.requestUpdateConfig(interval, smart, chance, perRound, highFreq, namesPerRound,silence,timeout,damage,damageInterval);
+                Boolean phonetic=body.has("phoneticMatching")?body.get("phoneticMatching").getAsBoolean():null;
+                Float phoneticThreshold=body.has("phoneticThreshold")?body.get("phoneticThreshold").getAsFloat():null;
+                manager.requestUpdateConfig(interval, smart, chance, perRound, highFreq, namesPerRound,silence,timeout,damage,damageInterval,phonetic,phoneticThreshold);
                 return true;
             }));
 

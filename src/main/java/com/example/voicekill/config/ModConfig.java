@@ -64,6 +64,9 @@ public final class ModConfig {
 
     /** 把每句识别结果打到日志（排查「为什么没触发」时非常有用） */
     public boolean logSpeech = true;
+    public boolean phoneticMatching = true;
+    public float phoneticThreshold = .35f;
+    public com.example.voicekill.speech.PhoneticMatcher.Settings phoneticSettings(){return new com.example.voicekill.speech.PhoneticMatcher.Settings(phoneticMatching,phoneticThreshold);}
 
     /** Server-owned optional damage after no new recognized text; 2 health points = 1 heart. */
     public boolean silencePenaltyEnabled = false;
@@ -216,6 +219,7 @@ public final class ModConfig {
 
     /** 兜底：null / 空列表 / 非法间隔 全部拉回合法值 */
     private void sanitize() {
+        phoneticThreshold=phoneticSettings().threshold();
         applySilenceRules(silenceRules());
         Set<String> cleaned = new LinkedHashSet<>();
         if (dangerWords != null) {

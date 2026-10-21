@@ -1,6 +1,6 @@
 # 识别模型、自然断句与回放
 
-当前为 dev.12。底层使用 sherpa-onnx 1.13.5 的小型双语 Zipformer INT8，CPU 默认单线程、beam 4。保留 dev.3 基础方案；新增 Silero VAD 边界、句末 SenseVoice INT8 音频复核与 CT Transformer 离线标点。
+当前为 dev.13。底层使用 sherpa-onnx 1.13.5 的小型双语 Zipformer INT8，CPU 默认单线程、beam 4。保留 dev.3 基础方案；新增 Silero VAD 边界、句末 SenseVoice INT8 音频复核与 CT Transformer 离线标点。
 
 ## 模型与缓存
 
@@ -44,17 +44,17 @@ PCM 每 40ms 送入 Silero 和同一个 Zipformer 流；实时假设仅显示。
 
 自然边界模型不可用时暂用原 Zipformer 流式端点，并在 F8/网页显示原因；关闭 `speechNaturalBoundary` 可主动用此路径。关闭句末复核/标点分别停用对应模型，不影响采音。
 
-## 词表优先级和误杀约束
+## 词表优先级和读音匹配
 
 支持可选识别词表元数据，本轮自定义词/人名优先。多字字母/混合词保持原有最高提示强度 1.5，普通字母词减弱，优先长中文词只加低强度提示；中文单字和短词不加偏置。提示只使用原词及通用逐字母格式，没有昵称专用的中文替换表。
 
-服务端使用最终选定句；先按精确证据，再按优先标记和完整长度选择命中，不把优先标记转换为额外的模糊权限。单字仍仅接受原始首候选。句末复核只有两次音频结果一致时追加新候选；完整初识遇受约束的漏尾或孤立单字同音变化时保留。新增字母处罚仅限当前段精确包含；新增游戏名读音路径独立于本轮危险词，需要整词音节、字面锚点及原始支持，不跨段补全。没有引入无音频依据的“中文联想改写”。
+服务端只使用最终选定句，已接受的复核不会因初识没命中而失效。精确/别名/字母读音后，统一计算中文音节距离，支持前后鼻音、h/f、l/n、平翘舌；所有词源包括单字使用同一规则。同分优先自定义词/人名及较完整词，跨轮仍按新组优先。
 
-实际漏判/误杀与延迟见 [dev.7 验证](DEV7_VALIDATION.md)。保留历史组中 MC 被听成 ABC 的误杀和新增混合句 P老板 的漏判，不能据小批合成音频声称所有中文口音已解决。
+`phoneticMatching: true`、`phoneticThreshold: 0.35` 为默认服务端设置，范围 0.05～0.75。模型权重和断句参数不变，不增加复核轮次；泛化匹配不改写模型输出。“菜/才”“刚/干”等同音/近音会产生额外触发，完整判定回放与边界见 [dev.13 验证](DEV13_VALIDATION.md)。下方各 dev 版本保留当时的历史策略及数字，不能当作当前规则。
 
 ## 复现
 
-原 WAV 存在时不要重新生成。Gradle `replayNicknames` 支持 `replayEngine=priority`、`replayMaxUtteranceSeconds=10`、`replayEndpointSilenceSeconds=0.6`，以及可选 `replayLexicon` JSON（text/source/aliases/preferred）。完整命令见 dev.7 验证文档。
+原 WAV 存在时不要重新生成。当前 NicknameReplay 默认使用最终句统一读音匹配（true/0.35），报告记录两字段；旧规则对照由 ReviewedReplayCheck 不传强度参数执行。Gradle `replayNicknames` 支持 `replayEngine=priority`、`replayMaxUtteranceSeconds=10`、`replayEndpointSilenceSeconds=0.6`，以及可选 `replayLexicon` JSON（text/source/aliases/preferred）。完整命令见 dev.7 验证文档。
 
 能力回放加速时采用输入音频时间推进 5 秒匹配历史，不将压缩墙钟当真实历史；延迟只看 `replayRealtime=true` 报告，排除模型初始化、Minecraft tick 和网络。Vosk 兼容模式显式按 UTF-8 读取 native JSON，避免 Windows 默认编码乱码。
 
@@ -122,3 +122,7 @@ dev.3 的 [同组音频复测](REPLAY_OPTIMIZATION.md) 中，`p老板` 与 `才`
 ## dev.11 无文字活跃状态
 
 新增可选无识别文字扣血玩法。实时识别出现新文字时最多每秒发送一个不含原文的会话通知，只重置服务端等待，不参与危险词处罚。原端点 Zipformer/Vosk 补齐已有临时结果的透传，模型与解码参数不变。原连续语音回放验证了等待设为 5 秒时不会因长句约 10 秒才结算而提前扣血，见 [dev.11 说明](DEV11_VALIDATION.md)。
+
+## dev.13 最终句读音匹配
+
+语音模型及 104 条 WAV 未改；复用 dev.10 保存的原生识别事件重新经过当前服务端规则。正确命中为原组 17/21、逐字母 24/24、完整句 2/2、混合句 21/22；无已有正确命中丢失，新增 4 个同音/近音触发，保留混合组 1 个既有误触发。此结果只检验判定层，不是新模型推理、真人口音准确率或端到端延迟。见 [完整记录](DEV13_VALIDATION.md)。

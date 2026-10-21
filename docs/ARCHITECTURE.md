@@ -1,6 +1,6 @@
 # 项目结构与运行机制
 
-依据 2026-10-21 的 1.0.15-dev.12 源码；历史交接资料来自 1.0.14。
+依据 2026-10-21 的 1.0.15-dev.13 源码；历史交接资料来自 1.0.14。
 实际修复和验证边界见 [修复与验收说明](FIXES_AND_VALIDATION.md)。
 
 ## 目录约定
@@ -42,7 +42,8 @@ Java 包名仍为 `com.example.voicekill`。网页是资源中的单文件 HTML/
 | `speech/RoundSpeechWindow.java` | 服务端词表快照、语句轮次范围、跨轮事件去重与后组优先；最多 32 组、历史保留约 60 秒 |
 | `speech/RecognitionSilence.java`、`SilenceDamage.java` | 可选的无识别文字扣血计时与独立伤害类型，服务端 tick 执行 |
 | `client/RecognitionActivity.java`、`network/RecognitionActivityPayload.java` | 新识别文字的限速活跃通知，仅携带会话 UUID，不参与匹配/词频 |
-| `speech/WordMatcher.java` | 精确、别名、逐字读音、有限编辑距离匹配及命中证据 |
+| `speech/WordMatcher.java` | 命中数据、优先排序及历史匹配规则 |
+| `speech/PhoneticMatcher.java` | 最终句的统一精确/别名/字母/加权音节距离匹配，保留证据区间 |
 | `util/TextUtil.java` | 匹配用的小写及去空白归一化 |
 | `util/WordAliases.java` | 展示别名生成和无需展开笛卡尔积的读音规则 |
 | `util/FuzzyMatch.java` | 有长度门槛的滑窗编辑距离匹配 |
@@ -55,7 +56,7 @@ Java 包名仍为 `com.example.voicekill`。网页是资源中的单文件 HTML/
 | `client/RoundTrackingDecoder.java` | 在句末复核前按音频采样范围绑定词表编号；换轮保留音频，换会话/停止时清除 |
 | `client/EnhancedDecoder.java`、`client/PcmUtterance.java` | 有界保留段音频，后台加载可选模型，沿用原识别结算边界 |
 | `client/SentencePostprocessor.java`、`client/NativeSentenceModels.java` | 两次一致的音频复核、正文不变的标点展示与故障回退 |
-| `speech/ReviewMatcher.java` | 复核候选仅按当前段的字母词精确包含；中文部分必须有原始识别依据 |
+| `speech/ReviewMatcher.java` | 保留历史规则对照；当前正式判定通过 acceptFinal，不再使用初识否决 |
 | `client/SpeechModels.java` | 固定模型清单、后台下载、SHA256 校验、本地缓存及按目录隔离的不可变实时进度快照 |
 | `client/ModelDownloadsScreen.java` | F7 模型实时进度页；渲染时只读取快照，不在渲染线程下载或校验权重 |
 | `client/AudioCapture.java` | Java Sound 格式探测/设备打开，转换为 16kHz mono PCM |
@@ -63,7 +64,7 @@ Java 包名仍为 `com.example.voicekill`。网页是资源中的单文件 HTML/
 | `client/AudioDevices.java`、`client/MicScreen.java` | 设备枚举、分页选择、实时状态和错误显示 |
 | `client/HudOverlay.java` | 危险词、倒计时与死亡榜渲染 |
 | `web/WebConsole.java` | JDK HttpServer 和 JSON 操作接口 |
-| `mixin/` | 历史设备重定向类仍未注册；客户端注册 VoiceKillActionBarMixin 做自有提示换行，VoiceKillSilenceCameraMixin 仅取消存活角色最后一次静默伤害的镜头倾斜 |
+| `mixin/` | 历史设备重定向类仍未注册；客户端仅注册 VoiceKillActionBarMixin 做自有提示换行；普通受伤镜头由原版处理，静默伤害保留 no_knockback/no_impact 标签 |
 
 ## 语音与规则链路
 
@@ -74,7 +75,7 @@ Java 包名仍为 `com.example.voicekill`。网页是资源中的单文件 HTML/
   → EnhancedDecoder（可选：句末音频复核 + 展示用标点）
   → 带事件 ID / 候选来源标记的 SpeechPacket → Shriek PlayerSpeakPacket
   → 服务端 ServerPlayerTalkEvent → SpeechHandler（切回服务端线程）
-  → RoundSpeechWindow → 各轮 SpeechWindow + WordMatcher → 词频 / 命中证据 / 处决
+  → RoundSpeechWindow → 各轮 SpeechWindow.acceptFinal + PhoneticMatcher → 词频 / 命中证据 / 处决
 
 服务端 tick → 换词与快照 → HudStatePayload + 可选 RecognitionLexiconPayload → 客户端 HUD / 词表提示
 实时新识别文字 → RecognitionActivityPayload → 服务端逐玩家重置无文字等待
@@ -87,8 +88,7 @@ Java 包名仍为 `com.example.voicekill`。网页是资源中的单文件 HTML/
 同一句候选互斥，只有不同事件才能拼接；窗口 5 秒、每条路径尾部最多 64 字，最多 32 条路径。
 命中必须包含本次新片段，不能仅命中旧尾巴。当前词更新时清理窗口，断开或处决时清理该玩家。
 跨轮仅保留词表快照，先前语句的拼接残片仍清除。同句按起止轮次范围由新到旧检查，新组命中直接优先；该句结束后才出现的轮次不参与。词组编号由服务端产生，客户端不上传自选词组；无轮次元数据的旧文本仅按当前轮处理。重新开始生成新会话编号，停止时清空所有旧快照。
-单字只接受最优候选，中文单字不自动生成谐音；显式配置别名仍可匹配最优候选。
-人名/手动长词保留编辑距离容错和逐字同音匹配；英文及中英混合词按位置匹配字母读音。
+正式判定只使用 SpeechPacket.finalText() 选定句；精确、配置别名、字母读音、中文加权音节距离依次匹配。中文覆盖所有来源及单字，默认强度 0.35；常见 l/n、h/f、平翘舌与 n/ng 距离较低。最小读音距离优先，同分再比较自定义/人名优先标记和完整长度。不同有效轮次仍优先较新组。
 
 ## 轮次和状态
 
@@ -97,6 +97,7 @@ Java 包名仍为 `com.example.voicekill`。网页是资源中的单文件 HTML/
 | `wordsPerRound` | 5 |
 | `namesPerRound` / `highFreqPerRound` | 1 / 1 |
 | `intervalSeconds` | 30 |
+| `phoneticMatching` / `phoneticThreshold` | true / 0.35（0.05～0.75） |
 | `smartPick` / `smartPickChance` | true / 70 |
 | `speechEngine` / `speechThreads` | zipformer / 1 |
 | `speechContextHints` / `speechEndpointSilenceSeconds` | true / 0.6 |
@@ -157,11 +158,11 @@ Java 包名仍为 `com.example.voicekill`。网页是资源中的单文件 HTML/
 
 ## dev.5 句末处理边界
 
-基础模型继续负责自然停顿及 5 秒连续讲话预算。句末处理会增加推理时间，不把标点模型输出当成声学端点。原始识别候选保留，音频复核不接收危险词表；两种尾静音条件输出归一化一致才添加带来源标记的候选。两次输出一致是稳定性筛选，不是独立模型投票或准确率保证。复核候选只参与 `ReviewMatcher` 的当前段精确包含，不进入模糊/读音/跨段历史。纯中文、单字符以及没有原始中文依据的混合目标均不能靠复核处罚。
+本节为 dev.5 历史：基础模型当时负责自然停顿及 5 秒连续讲话预算。句末处理会增加推理时间，不把标点模型输出当成声学端点。原始识别候选保留，音频复核不接收危险词表；两种尾静音条件输出归一化一致才添加带来源标记的候选。两次输出一致是稳定性筛选，不是独立模型投票或准确率保证。复核候选只参与 `ReviewMatcher` 的当前段精确包含，不进入模糊/读音/跨段历史。纯中文、单字符以及没有原始中文依据的混合目标均不能靠复核处罚。
 
 后处理模型在 daemon 线程下载、验证及加载；麦克风仍可使用基础模型。退出期间会中断加载并释放迟到的模型，同一缓存目录串行准备。网页 `/api/audio` 的 `postprocess` 显示模型状态、最近原文/复核/标点文本、耗时与错误。所有音频只在本地处理。
 
-当前默认断句参数及指定输入设备修复见 [dev.6 验证](DEV6_VALIDATION.md)；dev.5 节保留当时的 5 秒配置记录。
+当前已改为最终句统一读音匹配，不再沿用上述 ReviewMatcher 处罚限制。默认断句参数及指定输入设备修复见 [dev.6 验证](DEV6_VALIDATION.md)；dev.5 节保留当时的 5 秒配置记录。
 
 ## dev.7 边界、优先级与显示分离
 
@@ -169,6 +170,6 @@ Java 包名仍为 `com.example.voicekill`。网页是资源中的单文件 HTML/
 
 `RecognitionLexiconPayload` 是单独的可选 S2C 通道，发送本轮原词和优先标记，不带别名；发送前确认客户端支持。旧 HUD 包不变。客户端仅接受与当前 HUD 原词一致的元数据；不支持此通道时使用原字母提示。优先词保持已有字母提示最高强度 1.5，其他字母词降到 0.75，优先长中文词为 0.5；不偏置单字/短中文词。
 
-`WordMatcher.ordered/prefer` 在既有命中中按证据强度、优先标记、完整词长度选择，`SpeechWindow` 比较所有互斥候选而不是首个命中立即返回。既有 fuzzy eligibility 仍按原 source 决定，不因优先标记而扩张。
+dev.13 的 `PhoneticMatcher` 先检查全部原词的精确命中，再检查别名/字母读音，最后以半全局加权编辑距离寻找中文读音片段；插入/删除音节为 1，常见口音权重较小。仅接受包含新事件文字的证据，历史最多 5 秒/64 字。`SpeechWindow.acceptFinal` 不拼接互斥候选或已撤回原文；同句高频/智能词也接受读音匹配，仍不跨事件拼接这些词。旧 `accept`/`ReviewMatcher` 仅保留作回归对照。详细规则与权衡见 [dev.13 验证](DEV13_VALIDATION.md)。
 
 `ModSettingsScreen/ClientSettings` 使用独立草稿和客户端字段白名单，本地游戏规则排至服务端线程，不覆盖远程服务器规则或新选设备。`SpeechHighlight` 只做字面颜色映射，`HudPlacement` 负责比例布局/边界；自有 actionbar Mixin 将 VoiceKill 换词提示交给 `HotbarHint` 换行。详细使用见 [dev.7 设置](DEV7_SETTINGS.md)。

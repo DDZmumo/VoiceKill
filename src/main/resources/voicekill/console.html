@@ -195,6 +195,14 @@
              oninput="document.getElementById('intervalVal').textContent=this.value+'s'" onchange="saveConfig()">
     </section>
 
+    <section class="card col-4" aria-labelledby="phoneticTitle">
+      <h2 id="phoneticTitle">危险词读音匹配</h2>
+      <label class="switch"><input type="checkbox" id="phoneticEnabled" onchange="savePhoneticConfig()"><span>按读音向危险词模糊匹配</span></label>
+      <div class="kv"><label for="phoneticThreshold">模糊强度（越大越宽）</label><span id="phoneticThresholdVal">0.35</span></div>
+      <input type="range" id="phoneticThreshold" min="0.05" max="0.75" step="0.05" oninput="document.getElementById('phoneticThresholdVal').textContent=this.value" onchange="savePhoneticConfig()">
+      <p class="muted">先精确、再按读音选最接近的危险词。采用最终语句，初识不再否决已接受的复核结果。强度越大，近音也越容易触发。</p>
+    </section>
+
     <section class="card col-4" aria-labelledby="silenceTitle">
       <h2 id="silenceTitle">未识别到讲话时扣血</h2>
       <label class="switch" style="margin-bottom:8px">
@@ -361,6 +369,8 @@ function render() {
   setRange('names', state.namesPerRound, 'namesVal');
   setRange('highFreq', state.highFreqPerRound, 'highFreqVal');
   setRange('interval', Math.min(180, total), 'intervalVal', 's');
+  if(document.activeElement.id!=='phoneticEnabled')$('phoneticEnabled').checked=state.phoneticMatching ?? true;
+  setRange('phoneticThreshold',state.phoneticThreshold ?? .35,'phoneticThresholdVal','');
   if(document.activeElement.id!=='silenceEnabled')$('silenceEnabled').checked=!!state.silencePenaltyEnabled;
   setRange('silenceTimeout',state.silenceTimeoutSeconds ?? 30,'silenceTimeoutVal','s');
   setRange('silenceDamage',state.silenceDamageAmount ?? 2,'silenceDamageVal',' 点');
@@ -597,6 +607,9 @@ async function saveSilenceConfig() {
     silenceDamageIntervalSeconds: Number($('silenceInterval').value)
   });
   if(saved)toast('扣血设置已保存');
+}
+async function savePhoneticConfig() {
+  if(await act('/api/config',{phoneticMatching:$('phoneticEnabled').checked,phoneticThreshold:Number($('phoneticThreshold').value)}))toast('读音匹配设置已保存');
 }
 function addWord() {
   const v = $('addInput').value.trim();

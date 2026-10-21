@@ -22,6 +22,7 @@ public final class GameTerms {
         thread.setDaemon(true);thread.start();
     }
     public static void awaitReady(){warmUp();INDEX.join();}
+    public static List<String> syllables(String text){warmUp();if(!INDEX.isDone()||INDEX.isCompletedExceptionally())return List.of();return sounds(INDEX.getNow(null).syllables(),text);}
     private static Index load() throws Exception {
         try(var resource=GameTerms.class.getResourceAsStream("/voicekill/game-terms-zh-cn.json")) {
             if(resource==null)throw new IOException("Missing Minecraft vocabulary");

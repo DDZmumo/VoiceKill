@@ -4,8 +4,7 @@
   "package": "com.example.voicekill.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
-    "VoiceKillActionBarMixin",
-    "VoiceKillSilenceCameraMixin"
+    "VoiceKillActionBarMixin"
   ],
   "injectors": {
     "defaultRequire": 0

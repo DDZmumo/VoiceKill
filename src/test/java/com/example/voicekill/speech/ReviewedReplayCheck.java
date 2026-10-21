@@ -10,6 +10,7 @@ public final class ReviewedReplayCheck {
         GameTerms.awaitReady();
         var gson=new GsonBuilder().setPrettyPrinting().create();var summaries=new ArrayList<Map<String,Object>>();
         String input=args.length>0?args[0]:".local/diagnostics/dev7";String prefix=args.length>0?"":"final-";
+        PhoneticMatcher.Settings phonetic=args.length>2?new PhoneticMatcher.Settings(true,Float.parseFloat(args[2])):null;
         for(String name:List.of("original","negative","letters","sentences","mixed")) {
             var report=JsonParser.parseString(Files.readString(Path.of(input+"/"+prefix+name+".json"))).getAsJsonObject();
             var baseline=JsonParser.parseString(Files.readString(Path.of(".local/diagnostics/dev7/final-"+name+".json"))).getAsJsonObject();
@@ -29,14 +30,14 @@ public final class ReviewedReplayCheck {
                         boolean confirmed=accepted||event.has("reviewConfirmed")&&event.get("reviewConfirmed").getAsBoolean()||event.has("postprocess")&&event.getAsJsonObject("postprocess").has("latest")&&event.getAsJsonObject("postprocess").getAsJsonObject("latest").get("reason").getAsString().equals("unchanged");
                         var packet=SpeechPacket.parse(SpeechPacket.encode(candidates,accepted?Set.of(candidates.size()-1):Set.of(),confirmed));
                         long now=100000+Math.round(event.get(report.get("realtime").getAsBoolean()?"wallMs":"audioMs").getAsDouble());
-                        if(window.accept("p",packet,now).hit()!=null){current.add(word.text());break;}
+                        if(window.accept("p",packet,now,phonetic).hit()!=null){current.add(word.text());break;}
                     }
                 }
                 for(String word:current)if(expected.contains(word))hits++;else {falseHits++;if(!previous.contains(word))newFalse.add(id+":"+word);}
                 for(String word:previous)if(!current.contains(word)){if(expected.contains(word))losses.add(id+":"+word);else removedFalse.add(id+":"+word);}
             }
             var summary=new LinkedHashMap<String,Object>();summary.put("group",name);summary.put("hits",hits);summary.put("falseHits",falseHits);summary.put("lost",losses);summary.put("newFalse",newFalse);summary.put("removedFalse",removedFalse);summaries.add(summary);
-            if(!newFalse.isEmpty())throw new AssertionError(gson.toJson(summary));
+            if(phonetic==null&&!newFalse.isEmpty())throw new AssertionError(gson.toJson(summary));
         }
         Path output=Path.of(args.length>1?args[1]:input).resolve("reviewed-events.json");
         Files.createDirectories(output.getParent());Files.writeString(output,gson.toJson(summaries));

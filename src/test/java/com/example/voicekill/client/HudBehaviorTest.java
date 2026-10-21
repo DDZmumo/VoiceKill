@@ -38,11 +38,13 @@ class HudBehaviorTest {
         draft.hudBoardX=.25f;draft.hudTranscript=false;
         live.silencePenaltyEnabled=true;live.silenceTimeoutSeconds=45;live.silenceDamageAmount=3;live.silenceDamageIntervalSeconds=7;
         draft.silencePenaltyEnabled=false;draft.silenceTimeoutSeconds=5;draft.silenceDamageAmount=20;draft.silenceDamageIntervalSeconds=.5f;
+        live.phoneticMatching=false;live.phoneticThreshold=.15f;draft.phoneticMatching=true;draft.phoneticThreshold=.65f;
         assertEquals(1f,live.hudBoardX);
         ClientSettings.apply(draft,live);
         assertEquals(.25f,live.hudBoardX);assertFalse(live.hudTranscript);
         assertEquals(20,live.wordsPerRound);assertEquals(List.of("保留词库"),live.dangerWords);assertEquals("new microphone",live.audioDevice);
         assertEquals(List.of("server template"),live.deathMessages);assertFalse(live.customDeathMessages);assertEquals("classic",live.deathMessageStyle);
         assertTrue(live.silencePenaltyEnabled);assertEquals(45,live.silenceTimeoutSeconds);assertEquals(3,live.silenceDamageAmount);assertEquals(7,live.silenceDamageIntervalSeconds);
+        assertFalse(live.phoneticMatching);assertEquals(.15f,live.phoneticThreshold);
     }
 }

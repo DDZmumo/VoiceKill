@@ -3,6 +3,7 @@ package com.example.voicekill.client;
 import com.example.voicekill.speech.SpeechPacket;
 import com.example.voicekill.speech.SpeechWindow;
 import com.example.voicekill.speech.WordMatcher;
+import com.example.voicekill.speech.PhoneticMatcher;
 import com.example.voicekill.util.WordAliases;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -160,13 +161,13 @@ public final class NicknameReplay {
                     activeDecoder instanceof EnhancedDecoder enhanced?enhanced.literalCandidates():java.util.Set.of(),activeDecoder.reviewConfirmed()));
             long matchingTime = realtime ? System.currentTimeMillis() : 1_000_000L + Math.round(audioMs);
             if(combined.get()==null) {
-                var best=allWords.accept("combined",packet,evaluationWords,matchingTime);
+                var best=allWords.acceptFinal("combined",packet,evaluationWords,matchingTime,PhoneticMatcher.Settings.defaults());
                 if(best.hit()!=null)combined.set(best.hit().word());
             }
             for (String target : targets) {
                 if (hits.containsKey(target)) continue; // 对应玩家在第一次命中时已被处决。
                 // 加速回放也必须推进断句历史时间，不能把几秒的音频压成毫秒后错误拼接。
-                var decision = windows.get(target).accept("replay-player", packet, configured.get(target), matchingTime);
+                var decision = windows.get(target).acceptFinal("replay-player",packet,configured.get(target),matchingTime,PhoneticMatcher.Settings.defaults());
                 if (decision.hit() != null) {
                     Map<String, Object> hit = new LinkedHashMap<>();
                     hit.put("wallMs", (System.nanoTime() - source.startNanos) / 1e6);
@@ -219,7 +220,9 @@ public final class NicknameReplay {
         report.put("maxUtteranceSeconds", replaySettings.maxUtteranceSeconds());
         report.put("budgetStart", (engine.equals("natural")||engine.equals("priority"))?"Silero detected speech; watchdog survives vocabulary churn; idle reset":"first nonempty recognition hypothesis; idle does not consume speech budget");
         report.put("segmentReset", engine.equals("sensevoice") ? "Silero VAD; fresh offline stream per utterance; no vocabulary access" : "fresh native stream at each endpoint and vocabulary change");
-        report.put("dangerWordPolicy", "each target scored separately using evaluationVocabulary; actual combined decision also recorded; first hit only");
+        report.put("dangerWordPolicy", "selected final sentence; each target scored separately using evaluationVocabulary; actual combined decision also recorded; first hit only");
+        report.put("phoneticMatching", true);
+        report.put("phoneticThreshold",PhoneticMatcher.Settings.defaults().threshold());
         report.put("rows", rows);
         Files.writeString(output, new GsonBuilder().disableHtmlEscaping().setPrettyPrinting().create().toJson(report));
     }

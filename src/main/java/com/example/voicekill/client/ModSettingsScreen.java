@@ -95,6 +95,8 @@ public final class ModSettingsScreen extends Screen {
                 return r;
             }
             r.add(action("自定义死亡文本（开关 / 编辑 / 预览）",()->Minecraft.getInstance().setScreen(new DeathMessagesScreen(this,draft,()->gameDirty=true)),true));
+            r.add(toggle("按读音向危险词模糊匹配",()->draft.phoneticMatching,()->{draft.phoneticMatching=!draft.phoneticMatching;gameDirty=true;}));
+            r.add(number("读音模糊强度（越大越宽）",.05,.75,.05,()->draft.phoneticThreshold,v->{draft.phoneticThreshold=(float)v;gameDirty=true;},""));
             r.add(toggle("未识别到文字时持续扣血",()->draft.silencePenaltyEnabled,()->{draft.silencePenaltyEnabled=!draft.silencePenaltyEnabled;gameDirty=true;}));
             r.add(number("无新识别文字后开始扣血",5,600,1,()->draft.silenceTimeoutSeconds,v->{draft.silenceTimeoutSeconds=(float)v;gameDirty=true;}," 秒"));
             r.add(number("每次扣血（2 点 = 1 颗心）",.5,20,.5,()->draft.silenceDamageAmount,v->{draft.silenceDamageAmount=(float)v;gameDirty=true;}," 点"));
@@ -138,8 +140,8 @@ public final class ModSettingsScreen extends Screen {
                 live.customDeathMessages=saved.customDeathMessages;
                 live.deathMessageStyle=com.example.voicekill.DeathMessages.Style.from(saved.deathMessageStyle).id;
                 live.deathMessages=new ArrayList<>(com.example.voicekill.DeathMessages.sanitize(saved.deathMessages));
-                if(integrated!=null)VoiceKillMod.manager().requestUpdateConfig(saved.intervalSeconds,saved.smartPick,saved.smartPickChance,saved.wordsPerRound,saved.highFreqPerRound,saved.namesPerRound,saved.silencePenaltyEnabled,saved.silenceTimeoutSeconds,saved.silenceDamageAmount,saved.silenceDamageIntervalSeconds);
-                else {live.intervalSeconds=saved.intervalSeconds;live.wordsPerRound=saved.wordsPerRound;live.namesPerRound=Math.min(saved.namesPerRound,saved.wordsPerRound);live.highFreqPerRound=Math.min(saved.highFreqPerRound,saved.wordsPerRound);live.smartPick=saved.smartPick;live.smartPickChance=saved.smartPickChance;live.applySilenceRules(saved.silenceRules());}
+                if(integrated!=null)VoiceKillMod.manager().requestUpdateConfig(saved.intervalSeconds,saved.smartPick,saved.smartPickChance,saved.wordsPerRound,saved.highFreqPerRound,saved.namesPerRound,saved.silencePenaltyEnabled,saved.silenceTimeoutSeconds,saved.silenceDamageAmount,saved.silenceDamageIntervalSeconds,saved.phoneticMatching,saved.phoneticThreshold);
+                else {live.intervalSeconds=saved.intervalSeconds;live.wordsPerRound=saved.wordsPerRound;live.namesPerRound=Math.min(saved.namesPerRound,saved.wordsPerRound);live.highFreqPerRound=Math.min(saved.highFreqPerRound,saved.wordsPerRound);live.smartPick=saved.smartPick;live.smartPickChance=saved.smartPickChance;live.applySilenceRules(saved.silenceRules());live.phoneticMatching=saved.phoneticMatching;live.phoneticThreshold=saved.phoneticSettings().threshold();}
                 live.save();
             };
             if(integrated!=null)integrated.execute(apply);else apply.run();gameDirty=false;

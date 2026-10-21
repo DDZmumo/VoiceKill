@@ -141,6 +141,8 @@ public final class DangerWordManager {
     public boolean isRunning() {
         return running;
     }
+    public com.example.voicekill.speech.PhoneticMatcher.Settings phoneticSettings(){return config.phoneticSettings();}
+    public boolean logSpeech(){return config.logSpeech;}
 
     /** /voicekill start：清空本周期统计，重新组一组词，开始计时 */
     public void start(MinecraftServer server) {
@@ -438,7 +440,7 @@ public final class DangerWordManager {
 
     public String match(String speechText) {
         if (!running) return null;
-        var hit = com.example.voicekill.speech.WordMatcher.find(matchingWords(), speechText, false, 0);
+        var hit = com.example.voicekill.speech.PhoneticMatcher.find(matchingWords(),speechText,config.phoneticSettings());
         return hit == null ? null : hit.word();
     }
 
@@ -620,7 +622,7 @@ public final class DangerWordManager {
     public void requestPreviewSpeech(String text) {
         onServer(server -> {
             var packet = com.example.voicekill.speech.SpeechPacket.parse(text);
-            var result = previewWindow.accept("preview", packet, matchingWords(), System.currentTimeMillis());
+            var result = previewWindow.acceptFinal("preview", packet, matchingWords(), System.currentTimeMillis(),config.phoneticSettings());
             Map<String, Object> preview = new LinkedHashMap<>();
             preview.put("text", text == null ? "" : text);
             preview.put("matched", result.hit() != null);
@@ -749,6 +751,10 @@ public final class DangerWordManager {
     }
     public void requestUpdateConfig(Integer intervalSeconds,Boolean smartPick,Integer smartPickChance,Integer wordsPerRound,Integer highFreqPerRound,Integer namesPerRound,
                                     Boolean silenceEnabled,Float silenceTimeout,Float silenceDamage,Float silenceInterval) {
+        requestUpdateConfig(intervalSeconds,smartPick,smartPickChance,wordsPerRound,highFreqPerRound,namesPerRound,silenceEnabled,silenceTimeout,silenceDamage,silenceInterval,null,null);
+    }
+    public void requestUpdateConfig(Integer intervalSeconds,Boolean smartPick,Integer smartPickChance,Integer wordsPerRound,Integer highFreqPerRound,Integer namesPerRound,
+                                    Boolean silenceEnabled,Float silenceTimeout,Float silenceDamage,Float silenceInterval,Boolean phoneticEnabled,Float phoneticThreshold) {
         onServer(server -> {
             boolean intervalChanged = false;
             if (intervalSeconds != null) {
@@ -779,6 +785,8 @@ public final class DangerWordManager {
                     silenceDamage==null?config.silenceDamageAmount:silenceDamage,
                     silenceInterval==null?config.silenceDamageIntervalSeconds:silenceInterval));
             recognitionSilence.configure(config.silenceRules());
+            if(phoneticEnabled!=null)config.phoneticMatching=phoneticEnabled;
+            if(phoneticThreshold!=null)config.phoneticThreshold=new com.example.voicekill.speech.PhoneticMatcher.Settings(config.phoneticMatching,phoneticThreshold).threshold();
             config.save();
 
             if (intervalChanged) {
@@ -824,6 +832,8 @@ public final class DangerWordManager {
         map.put("highFreqPerRound", config.highFreqPerRound);
         map.put("intervalSeconds", config.intervalSeconds);
         map.put("silencePenaltyEnabled",config.silencePenaltyEnabled);
+        map.put("phoneticMatching",config.phoneticMatching);
+        map.put("phoneticThreshold",config.phoneticThreshold);
         map.put("silenceTimeoutSeconds",config.silenceTimeoutSeconds);
         map.put("silenceDamageAmount",config.silenceDamageAmount);
         map.put("silenceDamageIntervalSeconds",config.silenceDamageIntervalSeconds);

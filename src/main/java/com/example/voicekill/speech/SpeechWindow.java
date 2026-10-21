@@ -19,6 +19,26 @@ public final class SpeechWindow {
     public record Result(WordMatcher.Hit hit, int candidate, boolean duplicate) {}
     private final Map<String, State> speakers = new HashMap<>();
 
+    public Result acceptFinal(String speaker,SpeechPacket packet,List<WordMatcher.Word> words,long now,PhoneticMatcher.Settings settings) {
+        speakers.entrySet().removeIf(e->now-e.getValue().at>60_000);
+        State state=speakers.computeIfAbsent(speaker,ignored->new State());
+        if(packet.eventId()!=null&&!state.events.add(packet.eventId()))return new Result(null,-1,true);
+        while(state.events.size()>64)state.events.remove(state.events.iterator().next());
+        String fresh=TextUtil.normalize(packet.finalText());
+        int candidate=packet.literalCandidates().stream().min(Integer::compareTo).orElse(0);
+        WordMatcher.Hit found=PhoneticMatcher.find(words,fresh,settings);
+        var next=new LinkedHashMap<String,Path>();addTail(next,new Path(fresh,false));
+        var stitchable=words.stream().filter(w->!"highfreq".equals(w.source())&&!"smart".equals(w.source())).toList();
+        if(now-state.at<=5000)for(var tail:state.tails) {
+            String joined=tail.text()+fresh;
+            var hit=PhoneticMatcher.find(stitchable,joined,settings,tail.text().length());
+            if(WordMatcher.prefer(hit,found,words))found=hit;
+            addTail(next,new Path(joined,false));
+        }
+        state.at=now;state.tails=new ArrayList<>(next.values());
+        return new Result(found,found==null?-1:candidate,false);
+    }
+
     public Result accept(String speaker, SpeechPacket packet, List<WordMatcher.Word> words, long now) {
         speakers.entrySet().removeIf(entry -> now - entry.getValue().at > 60_000);
         State state = speakers.computeIfAbsent(speaker, ignored -> new State());

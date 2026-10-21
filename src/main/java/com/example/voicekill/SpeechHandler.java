@@ -77,15 +77,16 @@ public final class SpeechHandler {
         String rawText = packet.candidates().getFirst();
         String text = com.example.voicekill.speech.GameTerms.display(rawText,packet.finalText(),packet.reviewConfirmed());
         String speaker = player == null ? "simulation" : player.getUUID().toString();
-        var result = WINDOW.accept(speaker, packet, System.currentTimeMillis());
-        if (result.duplicate()||result.stale()) return;
+        var result = WINDOW.accept(speaker, packet, System.currentTimeMillis(),manager.phoneticSettings());
+        if(result.duplicate())return;
+        if(result.stale()){if(manager.logSpeech())VoiceKillMod.LOGGER.info("[VoiceKill] 语音未判定：轮次范围已失效，event={}",packet.eventId());return;}
         manager.recordRecognizedText(player,text);
         warnIfMojibake(speaker, text);
         manager.stats().record(text);
         ModConfig config = ModConfig.get();
         if (config != null && config.logSpeech) {
-            VoiceKillMod.LOGGER.info("[VoiceKill] 语音 {}：{}；候选 {}", player == null ? "模拟" : player.getName().getString(),
-                    text, packet.candidates());
+            VoiceKillMod.LOGGER.info("[VoiceKill] 语音 {}：{}；候选 {}；最终判定={}；读音模糊={}/{}", player == null ? "模拟" : player.getName().getString(),
+                    text, packet.candidates(),result.hit()==null?"未命中":result.hit().word(),manager.phoneticSettings().enabled(),manager.phoneticSettings().threshold());
         }
         if (result.hit() == null) return;
         var hit = result.hit();

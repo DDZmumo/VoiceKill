@@ -92,6 +92,7 @@ def main():
                   allowVoskFallback=False, autoModelDownload=False, autoStartMicrophone=True,
                   hudTranscript=True, hudHotbarHint=True, customDeathMessages=True,
                   silencePenaltyEnabled=False, silenceTimeoutSeconds=30., silenceDamageAmount=2., silenceDamageIntervalSeconds=5.,
+                  phoneticMatching=True, phoneticThreshold=.35,
                   deathMessageStyle='friends', deathMessages=templates)
     (dest / 'config-template').mkdir()
     (dest / 'config-template/voicekill.json').write_text(json.dumps(config, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')

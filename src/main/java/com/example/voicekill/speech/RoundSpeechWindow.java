@@ -23,6 +23,9 @@ public final class RoundSpeechWindow {
         while(rounds.size()>MAX_ROUNDS||(rounds.size()>1&&now-rounds.get(1).at()>RETENTION_MS))rounds.removeFirst();
     }
     public Result accept(String speaker,SpeechPacket packet,long now) {
+        return accept(speaker,packet,now,null);
+    }
+    public Result accept(String speaker,SpeechPacket packet,long now,PhoneticMatcher.Settings settings) {
         prune(now);int first=rounds.size()-1,last=first;
         if(packet.rounds()!=null) {
             first=index(packet.rounds().first());last=index(packet.rounds().last());
@@ -31,7 +34,8 @@ public final class RoundSpeechWindow {
         if(dedup.accept(speaker,packet,List.of(),now).duplicate())return new Result(null,-1,true,false);
         WordMatcher.Hit hit=null;int candidate=-1;
         for(int i=last;i>=first;i--) {
-            var round=rounds.get(i);var result=round.window().accept(speaker,packet,round.words(),now);
+            var round=rounds.get(i);
+            var result=settings==null?round.window().accept(speaker,packet,round.words(),now):round.window().acceptFinal(speaker,packet,round.words(),now,settings);
             // Newer round wins even if an older round has stronger/longer evidence.
             if(hit==null&&result.hit()!=null){hit=result.hit();candidate=result.candidate();}
         }

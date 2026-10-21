@@ -10,25 +10,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class SilenceDamageTest {
     @org.junit.jupiter.api.BeforeAll static void bootstrap(){net.minecraft.SharedConstants.tryDetectVersion();net.minecraft.server.Bootstrap.bootStrap();}
-    private net.minecraft.world.damagesource.DamageSource source(String id) {
-        var key=net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.DAMAGE_TYPE,net.minecraft.resources.Identifier.parse(id));
-        var holder=net.minecraft.core.Holder.Reference.createStandAlone(new net.minecraft.core.HolderOwner<DamageType>(){},key);
-        return new net.minecraft.world.damagesource.DamageSource(holder);
-    }
-    @Test void onlySilenceDamageSuppressesDirectionalCameraAndDeathRemainsVisible() {
-        var silence=source("voicekill:silence");
-        assertTrue(SilenceDamage.hideHurtTilt(silence,false));
-        assertFalse(SilenceDamage.hideHurtTilt(source("minecraft:mob_attack"),false));
-        assertFalse(SilenceDamage.hideHurtTilt(source("minecraft:fall"),false));
-        assertFalse(SilenceDamage.hideHurtTilt(silence,true));assertFalse(SilenceDamage.hideHurtTilt(null,false));
-    }
-    @Test void cameraHookIsRegisteredAgainstTheActualSupportedMinecraftMethod() throws Exception {
-        assertNotNull(net.minecraft.client.renderer.GameRenderer.class.getDeclaredMethod("bobHurt",com.mojang.blaze3d.vertex.PoseStack.class,float.class));
-        try(var in=getClass().getResourceAsStream("/voicekill.mixins.json")) {
-            assertNotNull(in);var json=JsonParser.parseReader(new InputStreamReader(in,StandardCharsets.UTF_8)).getAsJsonObject();
-            assertTrue(json.getAsJsonArray("client").asList().stream().anyMatch(v->v.getAsString().equals("VoiceKillSilenceCameraMixin")));
-        }
-    }
     @Test void damageDefinitionUsesTheActualMinecraftCodec() throws Exception {
         try(var in=getClass().getResourceAsStream("/data/voicekill/damage_type/silence.json")){
             assertNotNull(in);var json=JsonParser.parseReader(new InputStreamReader(in,StandardCharsets.UTF_8));
