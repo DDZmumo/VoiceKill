@@ -21,10 +21,11 @@ def main():
     parser.add_argument('--mods-dir', required=True, type=Path)
     parser.add_argument('--metadata-dir', type=Path, default=ROOT / '.local/distributions/voicekill-dev5')
     parser.add_argument('--wordbank-source', type=Path)
+    parser.add_argument('--output-dir', type=Path, default=ROOT / '.local/distributions')
     args = parser.parse_args()
     version = re.search(r'^mod_version=(.+)$', (ROOT / 'gradle.properties').read_text(encoding='utf-8'), re.M)[1].strip()
     name = f'VoiceKill-{version}-MC1.21.11-Offline-NoVosk'
-    output = ROOT / '.local/distributions'
+    output = args.output_dir.resolve()
     dest = output / name
     archive = output / (name + '.zip')
     if archive.exists() or dest.exists():
@@ -47,14 +48,14 @@ def main():
         asset = next(item for item in metadata['release']['files'] if item['primary'])
         source = args.mods_dir / filename
         assert digest(source, 'sha512') == asset['hashes']['sha512'], filename
-        copy(source, 'game-root/mods/' + filename, asset['url'])
+        copy(source, '.minecraft/mods/' + filename, asset['url'])
         copy(metadata_file, 'sources/' + metadata_file.name)
 
     jar = ROOT / 'build/libs' / f'voicekill-{version}.jar'
     with zipfile.ZipFile(jar) as built:
         assert json.loads(built.read('fabric.mod.json'))['version'] == version
         assert not any(n.endswith(('.onnx', '.wav')) for n in built.namelist())
-    copy(jar, 'game-root/mods/' + jar.name)
+    copy(jar, '.minecraft/mods/' + jar.name)
     wordbank = ROOT / 'src/main/java/com/example/voicekill/wordbank/WordBank.java'
     if args.wordbank_source:
         assert wordbank.read_bytes() == args.wordbank_source.read_bytes()
@@ -70,7 +71,7 @@ def main():
         for asset in manifest['files']:
             source = ROOT / '.local/models' / local / asset['name']
             assert source.stat().st_size == asset['size'] and digest(source) == asset['sha256'], source
-            copy(source, 'game-root/voicekill/models/' + identifier + '/' + asset['name'], asset['url'])
+            copy(source, '.minecraft/voicekill/models/' + identifier + '/' + asset['name'], asset['url'])
 
     copy(ROOT / 'LICENSE', 'licenses/VoiceKill-MIT.txt')
     for license_file in (ROOT / 'src/main/resources/META-INF/voicekill-licenses').iterdir():
@@ -113,8 +114,9 @@ def main():
     with zipfile.ZipFile(archive) as packaged:
         assert packaged.testzip() is None
         names = packaged.namelist()
-        assert len([n for n in names if '/game-root/mods/' in n]) == 4
-        assert len([n for n in names if '/game-root/voicekill/models/' in n]) == 9
+        assert len([n for n in names if '/.minecraft/mods/' in n]) == 4
+        assert len([n for n in names if '/.minecraft/voicekill/models/' in n]) == 9
+        assert not any('/game-root/' in n or '/gam-root/' in n for n in names)
         assert not any('/vosk/' in n.lower() or 'vosk-model-' in n.lower() for n in names)
     checksum = digest(archive)
     (output / (archive.name + '.sha256')).write_text(checksum + '  ' + archive.name + '\n', encoding='utf-8')
