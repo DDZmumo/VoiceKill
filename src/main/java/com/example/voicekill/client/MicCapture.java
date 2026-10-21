@@ -100,6 +100,7 @@ public final class MicCapture {
             currentDevice = source.device(); inputFormat = source.format();
             final long token = ++generation;
             final CaptureSession.Decoder activeDecoder = decoder;
+            final RecognitionActivity recognitionActivity=new RecognitionActivity();
             session = new CaptureSession(source, decoder, candidates -> {
                 String packet = SpeechPacket.encode(candidates, activeDecoder.literalCandidates(),activeDecoder.reviewConfirmed(),activeDecoder.rounds());
                 if (config.logSpeech && activeDecoder instanceof EnhancedDecoder post)
@@ -110,7 +111,17 @@ public final class MicCapture {
                         ShriekPackets.sendToServer(new PlayerSpeakPacket(packet));
                     }
                 });
-            }, failure -> VoiceKillMod.LOGGER.error("[VoiceKill] 录音会话中断：{}", failure), SpeechTranscript::update);
+            }, failure -> VoiceKillMod.LOGGER.error("[VoiceKill] 录音会话中断：{}", failure), transcript->{
+                SpeechTranscript.update(transcript);
+                var context=roundContext;
+                if(context.running()&&!context.session().isEmpty()&&recognitionActivity.observe(context.session(),transcript.text(),transcript.interim(),System.nanoTime()/1_000_000)) {
+                    Minecraft.getInstance().execute(()->{
+                        if(generation==token&&roundContext.running()&&roundContext.session().equals(context.session())
+                                &&net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.canSend(com.example.voicekill.network.RecognitionActivityPayload.TYPE))
+                            net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new com.example.voicekill.network.RecognitionActivityPayload(context.session()));
+                    });
+                }
+            });
             session.start();
             VoiceKillMod.LOGGER.info("[VoiceKill] 录音已启动：{}，{} → 16kHz mono；识别引擎={}", currentDevice, inputFormat, activeEngine);
             return true;
@@ -248,6 +259,8 @@ public final class MicCapture {
         private final Method invokePointer;
         private final Method utf8String;
         private boolean closed;
+        private String partialText="";
+        @Override public String partial(){return partialText;}
         private CaptureSession.Boundary boundary=CaptureSession.Boundary.NONE;
         @Override public CaptureSession.Boundary boundary(){return boundary;}
 
@@ -290,7 +303,8 @@ public final class MicCapture {
             if (!endpoint) {
                 Object partialJson = invokePointer.invoke(partialResultFunction, (Object) new Object[]{pointer.invoke(recognizer)});
                 var partial = JsonParser.parseString((String)utf8String.invoke(partialJson,0L,"UTF-8")).getAsJsonObject();
-                hasHypothesis = partial.has("partial") && !partial.get("partial").getAsString().isBlank();
+                partialText=partial.has("partial")?partial.get("partial").getAsString():"";
+                hasHypothesis = !partialText.isBlank();
             }
             boolean due = budget.advance(bytes.length / 2, hasHypothesis);
             if (!endpoint && !due) return List.of();
@@ -299,6 +313,7 @@ public final class MicCapture {
             List<String> text = parseAlternatives((String) utf8String.invoke(json, 0L, "UTF-8"));
             if (!endpoint) reset.invoke(recognizer);
             budget.reset();
+            partialText="";
             boundary=text.isEmpty()?(endpoint?CaptureSession.Boundary.IDLE:CaptureSession.Boundary.DISCARD):CaptureSession.Boundary.FINAL;
             return text;
         }
@@ -307,7 +322,7 @@ public final class MicCapture {
             closed = true;
             closeNative(recognizer); closeNative(model);
         }
-        @Override public void discard() throws Exception {reset.invoke(recognizer);budget.reset();boundary=CaptureSession.Boundary.DISCARD;}
+        @Override public void discard() throws Exception {reset.invoke(recognizer);budget.reset();partialText="";boundary=CaptureSession.Boundary.DISCARD;}
         private static void closeNative(Object resource) {
             if (resource == null) return;
             try { resource.getClass().getMethod("close").invoke(resource); }

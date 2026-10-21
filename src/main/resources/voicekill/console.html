@@ -195,6 +195,24 @@
              oninput="document.getElementById('intervalVal').textContent=this.value+'s'" onchange="saveConfig()">
     </section>
 
+    <section class="card col-4" aria-labelledby="silenceTitle">
+      <h2 id="silenceTitle">未识别到讲话时扣血</h2>
+      <label class="switch" style="margin-bottom:8px">
+        <input type="checkbox" id="silenceEnabled" onchange="saveSilenceConfig()">
+        <span>启用持续扣血（默认关闭）</span>
+      </label>
+      <div class="kv"><label for="silenceTimeout">无新识别文字后开始</label><span id="silenceTimeoutVal">30s</span></div>
+      <input type="range" id="silenceTimeout" min="5" max="600" step="1"
+             oninput="document.getElementById('silenceTimeoutVal').textContent=this.value+'s'" onchange="saveSilenceConfig()">
+      <div class="kv"><label for="silenceDamage">每次扣血量</label><span id="silenceDamageVal">2 点</span></div>
+      <input type="range" id="silenceDamage" min="0.5" max="20" step="0.5"
+             oninput="document.getElementById('silenceDamageVal').textContent=this.value+' 点'" onchange="saveSilenceConfig()">
+      <div class="kv"><label for="silenceInterval">扣血间隔</label><span id="silenceIntervalVal">5s</span></div>
+      <input type="range" id="silenceInterval" min="0.5" max="60" step="0.5"
+             oninput="document.getElementById('silenceIntervalVal').textContent=this.value+'s'" onchange="saveSilenceConfig()">
+      <p class="muted">2 点生命 = 1 颗心。识别到新文字会重新计时；只有声音不算。仅游戏开始后对生存/冒险玩家生效，死亡后重新等待。</p>
+    </section>
+
     <section class="card col-4">
       <h2>言多必失榜 <span class="hint">共 <span id="totalDeaths">0</span> 次</span></h2>
       <div class="list" id="board"><div class="empty">还没有人死</div></div>
@@ -343,6 +361,10 @@ function render() {
   setRange('names', state.namesPerRound, 'namesVal');
   setRange('highFreq', state.highFreqPerRound, 'highFreqVal');
   setRange('interval', Math.min(180, total), 'intervalVal', 's');
+  if(document.activeElement.id!=='silenceEnabled')$('silenceEnabled').checked=!!state.silencePenaltyEnabled;
+  setRange('silenceTimeout',state.silenceTimeoutSeconds ?? 30,'silenceTimeoutVal','s');
+  setRange('silenceDamage',state.silenceDamageAmount ?? 2,'silenceDamageVal',' 点');
+  setRange('silenceInterval',state.silenceDamageIntervalSeconds ?? 5,'silenceIntervalVal','s');
 
   renderChips('stats', state.stats, '还没有人说话…');
   renderChips('lastCycle', state.lastCycle, '上一周期没有数据');
@@ -354,7 +376,7 @@ function render() {
 
 function setRange(id, value, labelId, suffix) {
   if (document.activeElement !== $(id)) $(id).value = value;
-  $(labelId).textContent = value + (suffix || '');
+  $(labelId).textContent = $(id).value + (suffix || '');
 }
 
 function renderWords() {
@@ -566,6 +588,15 @@ function saveConfig() {
     intervalSeconds: parseInt($('interval').value, 10)
   });
   toast('设置已保存');
+}
+async function saveSilenceConfig() {
+  const saved=await act('/api/config', {
+    silencePenaltyEnabled: $('silenceEnabled').checked,
+    silenceTimeoutSeconds: Number($('silenceTimeout').value),
+    silenceDamageAmount: Number($('silenceDamage').value),
+    silenceDamageIntervalSeconds: Number($('silenceInterval').value)
+  });
+  if(saved)toast('扣血设置已保存');
 }
 function addWord() {
   const v = $('addInput').value.trim();

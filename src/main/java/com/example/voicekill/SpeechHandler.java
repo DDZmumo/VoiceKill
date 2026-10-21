@@ -79,6 +79,7 @@ public final class SpeechHandler {
         String speaker = player == null ? "simulation" : player.getUUID().toString();
         var result = WINDOW.accept(speaker, packet, System.currentTimeMillis());
         if (result.duplicate()||result.stale()) return;
+        manager.recordRecognizedText(player,text);
         warnIfMojibake(speaker, text);
         manager.stats().record(text);
         ModConfig config = ModConfig.get();

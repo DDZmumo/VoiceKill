@@ -95,6 +95,10 @@ public final class ModSettingsScreen extends Screen {
                 return r;
             }
             r.add(action("自定义死亡文本（开关 / 编辑 / 预览）",()->Minecraft.getInstance().setScreen(new DeathMessagesScreen(this,draft,()->gameDirty=true)),true));
+            r.add(toggle("未识别到文字时持续扣血",()->draft.silencePenaltyEnabled,()->{draft.silencePenaltyEnabled=!draft.silencePenaltyEnabled;gameDirty=true;}));
+            r.add(number("无新识别文字后开始扣血",5,600,1,()->draft.silenceTimeoutSeconds,v->{draft.silenceTimeoutSeconds=(float)v;gameDirty=true;}," 秒"));
+            r.add(number("每次扣血（2 点 = 1 颗心）",.5,20,.5,()->draft.silenceDamageAmount,v->{draft.silenceDamageAmount=(float)v;gameDirty=true;}," 点"));
+            r.add(number("持续扣血间隔",.5,60,.5,()->draft.silenceDamageIntervalSeconds,v->{draft.silenceDamageIntervalSeconds=(float)v;gameDirty=true;}," 秒"));
             r.add(number("每轮危险词",1,20,1,()->draft.wordsPerRound,v->{draft.wordsPerRound=(int)v;gameDirty=true;}," 个"));
             r.add(number("换词间隔",5,3600,5,()->draft.intervalSeconds,v->{draft.intervalSeconds=(int)v;gameDirty=true;}," 秒"));
             r.add(number("其中人名数量",0,20,1,()->draft.namesPerRound,v->{draft.namesPerRound=(int)v;gameDirty=true;},""));
@@ -134,13 +138,13 @@ public final class ModSettingsScreen extends Screen {
                 live.customDeathMessages=saved.customDeathMessages;
                 live.deathMessageStyle=com.example.voicekill.DeathMessages.Style.from(saved.deathMessageStyle).id;
                 live.deathMessages=new ArrayList<>(com.example.voicekill.DeathMessages.sanitize(saved.deathMessages));
-                if(integrated!=null)VoiceKillMod.manager().requestUpdateConfig(saved.intervalSeconds,saved.smartPick,saved.smartPickChance,saved.wordsPerRound,saved.highFreqPerRound,saved.namesPerRound);
-                else {live.intervalSeconds=saved.intervalSeconds;live.wordsPerRound=saved.wordsPerRound;live.namesPerRound=Math.min(saved.namesPerRound,saved.wordsPerRound);live.highFreqPerRound=Math.min(saved.highFreqPerRound,saved.wordsPerRound);live.smartPick=saved.smartPick;live.smartPickChance=saved.smartPickChance;}
+                if(integrated!=null)VoiceKillMod.manager().requestUpdateConfig(saved.intervalSeconds,saved.smartPick,saved.smartPickChance,saved.wordsPerRound,saved.highFreqPerRound,saved.namesPerRound,saved.silencePenaltyEnabled,saved.silenceTimeoutSeconds,saved.silenceDamageAmount,saved.silenceDamageIntervalSeconds);
+                else {live.intervalSeconds=saved.intervalSeconds;live.wordsPerRound=saved.wordsPerRound;live.namesPerRound=Math.min(saved.namesPerRound,saved.wordsPerRound);live.highFreqPerRound=Math.min(saved.highFreqPerRound,saved.wordsPerRound);live.smartPick=saved.smartPick;live.smartPickChance=saved.smartPickChance;live.applySilenceRules(saved.silenceRules());}
                 live.save();
             };
             if(integrated!=null)integrated.execute(apply);else apply.run();gameDirty=false;
         }
-        status=reconnect?"已保存，正在重新连接麦克风…":"已保存；语音参数在重新连接后生效";
+        status=reconnect?"已保存，正在重新连接麦克风…":"已保存；玩法立即生效，语音参数需重连麦克风";
         if(reconnect){var thread=new Thread(()->MicCapture.start(live.audioDevice),"VoiceKill-SettingsReconnect");thread.setDaemon(true);thread.start();}
     }
     @Override public void onClose(){Minecraft.getInstance().setScreen(parent);}

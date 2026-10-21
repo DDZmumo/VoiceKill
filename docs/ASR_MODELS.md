@@ -1,6 +1,6 @@
 # 识别模型、自然断句与回放
 
-当前为 dev.10。底层使用 sherpa-onnx 1.13.5 的小型双语 Zipformer INT8，CPU 默认单线程、beam 4。保留 dev.3 基础方案；新增 Silero VAD 边界、句末 SenseVoice INT8 音频复核与 CT Transformer 离线标点。
+当前为 dev.11。底层使用 sherpa-onnx 1.13.5 的小型双语 Zipformer INT8，CPU 默认单线程、beam 4。保留 dev.3 基础方案；新增 Silero VAD 边界、句末 SenseVoice INT8 音频复核与 CT Transformer 离线标点。
 
 ## 模型与缓存
 
@@ -118,3 +118,7 @@ dev.3 的 [同组音频复测](REPLAY_OPTIMIZATION.md) 中，`p老板` 与 `才`
 ## dev.10 跨轮完整句
 
 不再因换词清空未完成音频；同句跨轮使用服务端保存的词表快照，新组命中优先于旧组命中。开始新句时不加入旧组，复核耗时也不扩大适用轮次，跨轮不拼接不同语句的旧残片。每 4 秒换词的原生对照与不开换词时首段同在输入音频 10.36 秒结算，文字一致、epoch 未重置；这不是实机端到端延迟。协议与验证详见 [dev.10 验证](DEV10_VALIDATION.md)。
+
+## dev.11 无文字活跃状态
+
+新增可选无识别文字扣血玩法。实时识别出现新文字时最多每秒发送一个不含原文的会话通知，只重置服务端等待，不参与危险词处罚。原端点 Zipformer/Vosk 补齐已有临时结果的透传，模型与解码参数不变。原连续语音回放验证了等待设为 5 秒时不会因长句约 10 秒才结算而提前扣血，见 [dev.11 说明](DEV11_VALIDATION.md)。

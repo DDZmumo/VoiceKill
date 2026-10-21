@@ -34,6 +34,8 @@ public final class ZipformerDecoder implements CaptureSession.Decoder {
     private boolean closed;
     private CaptureSession.Boundary boundary=CaptureSession.Boundary.NONE;
     private long epoch;
+    private String partial="";
+    @Override public String partial(){return partial;}
     @Override public CaptureSession.Boundary boundary(){return boundary;}
     @Override public long epoch(){return epoch;}
 
@@ -139,7 +141,7 @@ public final class ZipformerDecoder implements CaptureSession.Decoder {
         stream.acceptWaveform(pcmSamples(bytes), 16000);
         boolean decoded = false;
         while (recognizer.isReady(stream)) { recognizer.decode(stream); decoded = true; }
-        if (decoded) hasHypothesis = !recognizer.getResult(stream).getText().isBlank();
+        if (decoded) {partial=recognizer.getResult(stream).getText().trim();hasHypothesis = !partial.isBlank();}
         boolean due = budget.advance(bytes.length / 2, hasHypothesis);
         boolean endpoint = recognizer.isEndpoint(stream);
         if (!endpoint && !due) return List.of();
@@ -148,6 +150,7 @@ public final class ZipformerDecoder implements CaptureSession.Decoder {
             // 此时没有旧文本，不会将上一段的已识别音节带入新段。
             recognizer.reset(stream);
             budget.reset();
+            partial="";
             boundary=CaptureSession.Boundary.IDLE;
             return List.of();
         }
@@ -163,6 +166,7 @@ public final class ZipformerDecoder implements CaptureSession.Decoder {
         OnlineStream next = createStream(nextHints);
         stream.release(); stream = next; activeHints = nextHints;
         budget.reset(); hasHypothesis = false;
+        partial="";
         boundary=text.isEmpty()?CaptureSession.Boundary.DISCARD:CaptureSession.Boundary.FINAL;
         return text.isEmpty() ? List.of() : List.of(text);
     }
@@ -172,5 +176,5 @@ public final class ZipformerDecoder implements CaptureSession.Decoder {
         closed = true;
         try { stream.release(); } finally { recognizer.release(); }
     }
-    @Override public void discard(){resetPreview();budget.reset();hasHypothesis=false;boundary=CaptureSession.Boundary.DISCARD;epoch++;}
+    @Override public void discard(){resetPreview();budget.reset();hasHypothesis=false;partial="";boundary=CaptureSession.Boundary.DISCARD;epoch++;}
 }

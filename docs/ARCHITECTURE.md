@@ -1,6 +1,6 @@
 # 项目结构与运行机制
 
-依据 2026-10-20 的 1.0.15-dev.10 源码；历史交接资料来自 1.0.14。
+依据 2026-10-21 的 1.0.15-dev.11 源码；历史交接资料来自 1.0.14。
 实际修复和验证边界见 [修复与验收说明](FIXES_AND_VALIDATION.md)。
 
 ## 目录约定
@@ -40,6 +40,8 @@ Java 包名仍为 `com.example.voicekill`。网页是资源中的单文件 HTML/
 | `speech/SpeechPacket.java` | Shriek 文本通道中的编号事件封装；兼容旧纯文本，最多 3 个候选 |
 | `speech/SpeechWindow.java` | 按玩家隔离的断句历史、候选分支和事件 ID 去重 |
 | `speech/RoundSpeechWindow.java` | 服务端词表快照、语句轮次范围、跨轮事件去重与后组优先；最多 32 组、历史保留约 60 秒 |
+| `speech/RecognitionSilence.java`、`SilenceDamage.java` | 可选的无识别文字扣血计时与独立伤害类型，服务端 tick 执行 |
+| `client/RecognitionActivity.java`、`network/RecognitionActivityPayload.java` | 新识别文字的限速活跃通知，仅携带会话 UUID，不参与匹配/词频 |
 | `speech/WordMatcher.java` | 精确、别名、逐字读音、有限编辑距离匹配及命中证据 |
 | `util/TextUtil.java` | 匹配用的小写及去空白归一化 |
 | `util/WordAliases.java` | 展示别名生成和无需展开笛卡尔积的读音规则 |
@@ -75,6 +77,8 @@ Java 包名仍为 `com.example.voicekill`。网页是资源中的单文件 HTML/
   → RoundSpeechWindow → 各轮 SpeechWindow + WordMatcher → 词频 / 命中证据 / 处决
 
 服务端 tick → 换词与快照 → HudStatePayload + 可选 RecognitionLexiconPayload → 客户端 HUD / 词表提示
+实时新识别文字 → RecognitionActivityPayload → 服务端逐玩家重置无文字等待
+服务端 tick → 可选 RecognitionSilence → 按超时/间隔施加 SilenceDamage
 网页 console.html → HTTP API → 管理器操作入口 → 服务端任务
 ```
 
@@ -106,6 +110,7 @@ Java 包名仍为 `com.example.voicekill`。网页是资源中的单文件 HTML/
 智能候选分数为上一轮次数 ×3 加累计次数 ×1；某次概率未命中后会终止本轮后续智能槽位尝试。
 没有在线玩家时倒计时重置。计时按服务端 tick，服务器卡顿会影响现实中的时长。
 未开始时不统计、不匹配；停止玩法不代表停止物理采音，后者可用 F8 停止。
+无识别文字扣血默认关闭，启用后只对生存/冒险玩家执行，死亡/离线清理计时。规则改变和重开重新等待，换轮不重置；最终句与实时新文字都可刷新等待。纯音量、标点和不变的旧假设不计，通知不携带待处罚文本。参数、单位与验收边界见 [dev.11 说明](DEV11_VALIDATION.md)。
 词频、换词历史与死亡榜为内存态；配置和网页词库修改写入 `config/voicekill.json`。
 `start` 不清空累计统计与死亡榜；服务器停止时退出玩法，下一世界仍需手动开始。
 

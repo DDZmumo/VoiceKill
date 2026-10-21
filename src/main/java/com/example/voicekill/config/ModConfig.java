@@ -65,6 +65,14 @@ public final class ModConfig {
     /** 把每句识别结果打到日志（排查「为什么没触发」时非常有用） */
     public boolean logSpeech = true;
 
+    /** Server-owned optional damage after no new recognized text; 2 health points = 1 heart. */
+    public boolean silencePenaltyEnabled = false;
+    public float silenceTimeoutSeconds = 30f;
+    public float silenceDamageAmount = 2f;
+    public float silenceDamageIntervalSeconds = 5f;
+    public com.example.voicekill.speech.RecognitionSilence.Rules silenceRules(){return new com.example.voicekill.speech.RecognitionSilence.Rules(silencePenaltyEnabled,silenceTimeoutSeconds,silenceDamageAmount,silenceDamageIntervalSeconds);}
+    public void applySilenceRules(com.example.voicekill.speech.RecognitionSilence.Rules rules){silencePenaltyEnabled=rules.enabled();silenceTimeoutSeconds=rules.timeoutSeconds();silenceDamageAmount=rules.damageAmount();silenceDamageIntervalSeconds=rules.intervalSeconds();}
+
     /** Server-owned death-message templates; empty/invalid lists fall back to defaults. */
     public boolean customDeathMessages = true;
     public String deathMessageStyle = "friends";
@@ -208,6 +216,7 @@ public final class ModConfig {
 
     /** 兜底：null / 空列表 / 非法间隔 全部拉回合法值 */
     private void sanitize() {
+        applySilenceRules(silenceRules());
         Set<String> cleaned = new LinkedHashSet<>();
         if (dangerWords != null) {
             for (String word : dangerWords) {

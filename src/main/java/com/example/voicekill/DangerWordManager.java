@@ -60,6 +60,8 @@ public final class DangerWordManager {
     private MinecraftServer lastServer;
     private String recognitionSession=java.util.UUID.randomUUID().toString();
     private String recognitionRound;
+    private final com.example.voicekill.speech.RecognitionSilence recognitionSilence=new com.example.voicekill.speech.RecognitionSilence();
+    private long silenceTick;
 
     /** 是否已经 /voicekill start 开始游戏 */
     private boolean running = false;
@@ -129,6 +131,8 @@ public final class DangerWordManager {
             }
         }
 
+        tickRecognitionSilence(server);
+
         if (server.getTickCount() % TICKS_PER_SECOND == 0) {
             publishSnapshot(server);
         }
@@ -141,6 +145,7 @@ public final class DangerWordManager {
     /** /voicekill start：清空本周期统计，重新组一组词，开始计时 */
     public void start(MinecraftServer server) {
         SpeechHandler.reset();recognitionSession=java.util.UUID.randomUUID().toString();
+        recognitionSilence.clear();silenceTick=0;
         this.running = true;
         this.nextWords = List.of();
         this.history.clear();
@@ -159,10 +164,34 @@ public final class DangerWordManager {
     /** /voicekill stop：停表、停止判定（榜单保留） */
     public void stop(MinecraftServer server) {
         this.running = false;
+        recognitionSilence.clear();
         SpeechHandler.reset();
         this.ticksElapsed = 0;
         VoiceKillMod.LOGGER.info("[VoiceKill] 游戏已停止（/voicekill start 重新开始）");
         publishSnapshot(server);
+    }
+
+    private static boolean silenceEligible(ServerPlayer player){return player!=null&&!player.hasDisconnected()&&!player.isDeadOrDying()&&!player.isCreative()&&!player.isSpectator();}
+    private void resetRecognition(ServerPlayer player) {
+        if(!running||!silenceEligible(player))return;
+        recognitionSilence.configure(config.silenceRules());
+        recognitionSilence.recognized(player.getUUID().toString(),silenceTick);
+    }
+    /** A partial-text activity notice is deliberately separate from danger-word judging. */
+    public void recordRecognition(ServerPlayer player,String session){if(recognitionSession.equals(session))resetRecognition(player);}
+    public void recordRecognizedText(ServerPlayer player,String text){if(com.example.voicekill.speech.RecognitionSilence.hasText(text))resetRecognition(player);}
+    public void forgetRecognition(ServerPlayer player){recognitionSilence.forget(player.getUUID().toString());}
+    private void tickRecognitionSilence(MinecraftServer server) {
+        recognitionSilence.configure(config.silenceRules());silenceTick++;
+        if(!recognitionSilence.rules().enabled())return;
+        for(ServerPlayer player:server.getPlayerList().getPlayers()) {
+            if(!recognitionSilence.step(player.getUUID().toString(),silenceTick,silenceEligible(player)))continue;
+            float amount=recognitionSilence.rules().damageAmount();
+            if(player.hurtServer(player.level(),SilenceDamage.source(player),amount)) {
+                player.displayClientMessage(Component.literal("[VoiceKill] 未识别到新文字，扣除 "+amount+" 点生命").withStyle(ChatFormatting.RED),true);
+                if(player.isDeadOrDying()) {recordDeath(player.getName().getString());SpeechHandler.forget(player);forgetRecognition(player);}
+            }
+        }
     }
 
     /** 把四角要显示的东西推给所有客户端 */
@@ -716,6 +745,10 @@ public final class DangerWordManager {
     /** 网页改配置；参数都可以为 null（表示这一项不动） */
     public void requestUpdateConfig(Integer intervalSeconds, Boolean smartPick, Integer smartPickChance,
                                     Integer wordsPerRound, Integer highFreqPerRound, Integer namesPerRound) {
+        requestUpdateConfig(intervalSeconds,smartPick,smartPickChance,wordsPerRound,highFreqPerRound,namesPerRound,null,null,null,null);
+    }
+    public void requestUpdateConfig(Integer intervalSeconds,Boolean smartPick,Integer smartPickChance,Integer wordsPerRound,Integer highFreqPerRound,Integer namesPerRound,
+                                    Boolean silenceEnabled,Float silenceTimeout,Float silenceDamage,Float silenceInterval) {
         onServer(server -> {
             boolean intervalChanged = false;
             if (intervalSeconds != null) {
@@ -740,6 +773,12 @@ public final class DangerWordManager {
             if (namesPerRound != null) {
                 config.namesPerRound = Math.max(0, Math.min(config.wordsPerRound, namesPerRound));
             }
+            config.applySilenceRules(new com.example.voicekill.speech.RecognitionSilence.Rules(
+                    silenceEnabled==null?config.silencePenaltyEnabled:silenceEnabled,
+                    silenceTimeout==null?config.silenceTimeoutSeconds:silenceTimeout,
+                    silenceDamage==null?config.silenceDamageAmount:silenceDamage,
+                    silenceInterval==null?config.silenceDamageIntervalSeconds:silenceInterval));
+            recognitionSilence.configure(config.silenceRules());
             config.save();
 
             if (intervalChanged) {
@@ -784,6 +823,10 @@ public final class DangerWordManager {
         map.put("wordsPerRound", config.wordsPerRound);
         map.put("highFreqPerRound", config.highFreqPerRound);
         map.put("intervalSeconds", config.intervalSeconds);
+        map.put("silencePenaltyEnabled",config.silencePenaltyEnabled);
+        map.put("silenceTimeoutSeconds",config.silenceTimeoutSeconds);
+        map.put("silenceDamageAmount",config.silenceDamageAmount);
+        map.put("silenceDamageIntervalSeconds",config.silenceDamageIntervalSeconds);
         map.put("remainingSeconds", Math.max(0, ticksUntilRotate / TICKS_PER_SECOND));
         map.put("elapsedSeconds", ticksElapsed / TICKS_PER_SECOND);
 

@@ -146,7 +146,11 @@ public final class WebConsole {
                         ? body.get("highFreqPerRound").getAsInt() : null;
                 Integer namesPerRound = body.has("namesPerRound")
                         ? body.get("namesPerRound").getAsInt() : null;
-                manager.requestUpdateConfig(interval, smart, chance, perRound, highFreq, namesPerRound);
+                Boolean silence=body.has("silencePenaltyEnabled")?body.get("silencePenaltyEnabled").getAsBoolean():null;
+                Float timeout=body.has("silenceTimeoutSeconds")?body.get("silenceTimeoutSeconds").getAsFloat():null;
+                Float damage=body.has("silenceDamageAmount")?body.get("silenceDamageAmount").getAsFloat():null;
+                Float damageInterval=body.has("silenceDamageIntervalSeconds")?body.get("silenceDamageIntervalSeconds").getAsFloat():null;
+                manager.requestUpdateConfig(interval, smart, chance, perRound, highFreq, namesPerRound,silence,timeout,damage,damageInterval);
                 return true;
             }));
 

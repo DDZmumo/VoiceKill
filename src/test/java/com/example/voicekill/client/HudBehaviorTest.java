@@ -36,10 +36,13 @@ class HudBehaviorTest {
         var live=new ModConfig();live.wordsPerRound=20;live.dangerWords=List.of("保留词库");live.audioDevice="new microphone";live.deathMessages=List.of("server template");live.customDeathMessages=false;live.deathMessageStyle="classic";
         var draft=ClientSettings.draft(live);draft.wordsPerRound=1;draft.dangerWords=List.of("must not overwrite");draft.audioDevice="stale microphone";draft.deathMessages=List.of("stale template");draft.customDeathMessages=true;draft.deathMessageStyle="friends";
         draft.hudBoardX=.25f;draft.hudTranscript=false;
+        live.silencePenaltyEnabled=true;live.silenceTimeoutSeconds=45;live.silenceDamageAmount=3;live.silenceDamageIntervalSeconds=7;
+        draft.silencePenaltyEnabled=false;draft.silenceTimeoutSeconds=5;draft.silenceDamageAmount=20;draft.silenceDamageIntervalSeconds=.5f;
         assertEquals(1f,live.hudBoardX);
         ClientSettings.apply(draft,live);
         assertEquals(.25f,live.hudBoardX);assertFalse(live.hudTranscript);
         assertEquals(20,live.wordsPerRound);assertEquals(List.of("保留词库"),live.dangerWords);assertEquals("new microphone",live.audioDevice);
         assertEquals(List.of("server template"),live.deathMessages);assertFalse(live.customDeathMessages);assertEquals("classic",live.deathMessageStyle);
+        assertTrue(live.silencePenaltyEnabled);assertEquals(45,live.silenceTimeoutSeconds);assertEquals(3,live.silenceDamageAmount);assertEquals(7,live.silenceDamageIntervalSeconds);
     }
 }
