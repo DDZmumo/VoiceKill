@@ -13,6 +13,13 @@ import com.example.voicekill.speech.RecognitionHealth.Issue;
 import static org.junit.jupiter.api.Assertions.*;
 
 class CaptureSessionTest {
+    @Test void waitingForTheFirstFrameIsUnconfirmedRatherThanAMicrophoneFailure() throws Exception {
+        var entered=new CountDownLatch(1);var firstFrame=new CountDownLatch(1);var closed=new CountDownLatch(1);var progressed=new CountDownLatch(1);
+        var source=new CaptureSession.Source(){boolean first=true;public int read(byte[] bytes)throws Exception{if(first){first=false;entered.countDown();firstFrame.await();return 2;}closed.await();return -1;}public void close(){firstFrame.countDown();closed.countDown();}};
+        var decoder=new CaptureSession.Decoder(){public List<String> accept(byte[] bytes){return List.of();}public void close(){}};
+        var session=new CaptureSession(source,decoder,ignored->{},ignored->fail("unexpected failure"),ignored->progressed.countDown());
+        try{session.start();assertTrue(entered.await(1,TimeUnit.SECONDS));assertEquals(Issue.UNKNOWN,session.issue());firstFrame.countDown();assertTrue(progressed.await(1,TimeUnit.SECONDS));assertEquals(Issue.READY,session.issue());}finally{assertTrue(session.stop());}
+    }
     @Test void modelLoadingAndFailureSuppressInferenceAndRecoveryStartsWithFreshAudio() throws Exception {
         var input=new LinkedBlockingQueue<byte[]>();var readiness=new AtomicReference<>(Issue.MODEL_LOADING);
         var paused=new CountDownLatch(1);var sent=new CountDownLatch(1);var failed=new CountDownLatch(1);var calls=new AtomicInteger();var discarded=new AtomicInteger();

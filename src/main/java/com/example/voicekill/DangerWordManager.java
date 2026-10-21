@@ -99,6 +99,8 @@ public final class DangerWordManager {
     /** 服务端启动时调用：先把 server 引用接上，并立刻发布一份初始快照给网页 */
     public void attach(MinecraftServer server) {
         this.lastServer = server;
+        recognitionSession=java.util.UUID.randomUUID().toString();
+        recognitionHealth.reset(recognitionSession);silenceTick=0;
         publishSnapshot(server);
     }
 
@@ -115,6 +117,7 @@ public final class DangerWordManager {
 
         // 没开始游戏：只维持网页/四角的状态显示，不计时、不轮换
         if (!running) {
+            tickRecognitionSilence(server);
             if (server.getTickCount() % TICKS_PER_SECOND == 0) {
                 publishSnapshot(server);
             }
@@ -148,7 +151,7 @@ public final class DangerWordManager {
     /** /voicekill start：清空本周期统计，重新组一组词，开始计时 */
     public void start(MinecraftServer server) {
         SpeechHandler.reset();recognitionSession=java.util.UUID.randomUUID().toString();
-        recognitionSilence.clear();recognitionHealth.reset(recognitionSession);silenceTick=0;
+        recognitionSilence.clear();recognitionHealth.bindSession(recognitionSession);
         this.running = true;
         this.nextWords = List.of();
         this.history.clear();
@@ -168,7 +171,6 @@ public final class DangerWordManager {
     public void stop(MinecraftServer server) {
         this.running = false;
         recognitionSilence.clear();
-        recognitionHealth.clear();
         SpeechHandler.reset();
         this.ticksElapsed = 0;
         VoiceKillMod.LOGGER.info("[VoiceKill] 游戏已停止（/voicekill start 重新开始）");
@@ -188,7 +190,7 @@ public final class DangerWordManager {
     public void recordRecognitionHealth(ServerPlayer player,String session,com.example.voicekill.speech.RecognitionHealth.Issue issue) {
         var server=player.level().getServer();if(server==null)return;
         if(!server.isSameThread()){server.execute(()->recordRecognitionHealth(player,session,issue));return;}
-        if(!running||player.hasDisconnected())return;
+        if(player.hasDisconnected())return;
         String id=player.getUUID().toString();boolean wasReady=recognitionHealth.ready(id,silenceTick);
         if(!recognitionHealth.report(id,session,issue,silenceTick))return;
         if(!wasReady||issue!=com.example.voicekill.speech.RecognitionHealth.Issue.READY){recognitionSilence.forget(id);SpeechHandler.forget(player);}
@@ -201,7 +203,7 @@ public final class DangerWordManager {
             if(!ready)SpeechHandler.forget(player);
             if(!player.isDeadOrDying()&&recognitionHealth.noticeDue(id,silenceTick))
                 player.displayClientMessage(Component.literal("[VoiceKill] "+recognitionHealth.issue(id,silenceTick).warning()).withStyle(ChatFormatting.YELLOW),true);
-            if(!recognitionSilence.step(id,silenceTick,silenceEligible(player)&&ready))continue;
+            if(!recognitionSilence.step(id,silenceTick,running&&silenceEligible(player)&&ready))continue;
             float amount=recognitionSilence.rules().damageAmount();
             if(player.hurtServer(player.level(),SilenceDamage.source(player),amount)) {
                 player.displayClientMessage(Component.literal("[VoiceKill] 未识别到新文字，扣除 "+amount+" 点生命").withStyle(ChatFormatting.RED),true);

@@ -34,7 +34,9 @@ public final class MicCapture {
     private static volatile Issue modelIssue=Issue.READY;
     private static String healthSession="";
     private static Issue sentIssue;
-    private static long healthSentAt,localNoticeAt;
+    private static long healthSentAt;
+    private static String warningSession="";
+    private static final com.example.voicekill.speech.RecognitionHealth localWarnings=new com.example.voicekill.speech.RecognitionHealth();
     private static volatile long generation;
     private static volatile boolean attempted;
     private static volatile List<String> recognitionWords = List.of();
@@ -58,7 +60,7 @@ public final class MicCapture {
         updateRecognitionVocabulary(payload.words(),payload.preferred());
         roundContext=new RoundTrackingDecoder.Context(payload.session(),payload.round(),payload.running());
     }
-    public static void disconnected(){roundContext=RoundTrackingDecoder.Context.empty();recognitionWords=List.of();recognitionVocabulary=List.of();healthSession="";sentIssue=null;SpeechTranscript.clear();}
+    public static void disconnected(){roundContext=RoundTrackingDecoder.Context.empty();recognitionWords=List.of();recognitionVocabulary=List.of();healthSession="";sentIssue=null;warningSession="";localWarnings.clear();SpeechTranscript.clear();}
     private static String hints() {
         var vocabulary=recognitionVocabulary;
         return vocabulary.isEmpty()?RecognitionHints.encode(recognitionWords):RecognitionHints.encodePriority(vocabulary);
@@ -75,22 +77,28 @@ public final class MicCapture {
         if(modelIssue!=Issue.READY)return modelIssue;
         var active=session;
         if(active!=null)return active.issue();
+        var config=ModConfig.get();
+        if("opening".equals(state)||(!attempted&&config!=null&&config.autoStartMicrophone))return Issue.UNKNOWN;
         return "model".equals(state)||"starting".equals(state)?Issue.MODEL_LOADING:Issue.MICROPHONE;
     }
     /** Main-thread heartbeat. Ready status never refreshes the no-speech deadline. */
     public static void tickHealth() {
         var client=Minecraft.getInstance();var context=roundContext;
-        if(client.getConnection()==null||!context.running()||context.session().isEmpty()){healthSession="";sentIssue=null;return;}
+        if(client.getConnection()==null||context.session().isEmpty()){healthSession="";sentIssue=null;warningSession="";localWarnings.clear();return;}
         long now=System.nanoTime();Issue issue=issue();
+        long noticeTick=now/50_000_000L;
+        if(!context.session().equals(warningSession)){warningSession=context.session();localWarnings.reset(warningSession);}
         if(issue!=Issue.READY)SpeechTranscript.clear();
         if(ClientPlayNetworking.canSend(RecognitionHealthPayload.TYPE)) {
+            localWarnings.report("local",warningSession,Issue.READY,noticeTick);
             if(!context.session().equals(healthSession)||issue!=sentIssue||now-healthSentAt>=1_000_000_000L) {
                 ClientPlayNetworking.send(new RecognitionHealthPayload(context.session(),issue));
                 healthSession=context.session();sentIssue=issue;healthSentAt=now;
             }
-        } else if(issue!=Issue.READY&&(localNoticeAt==0||now-localNoticeAt>=10_000_000_000L)) {
-            client.gui.setOverlayMessage(net.minecraft.network.chat.Component.literal("[VoiceKill] 麦克风或模型可能出现问题，可能无法正常游戏；服务端未支持异常保护，请服主更新").withStyle(net.minecraft.ChatFormatting.YELLOW),false);
-            localNoticeAt=now;
+        } else {
+            localWarnings.report("local",warningSession,issue,noticeTick);
+            if(localWarnings.noticeDue("local",noticeTick))
+                client.gui.setOverlayMessage(net.minecraft.network.chat.Component.literal("[VoiceKill] 麦克风或模型可能出现问题，可能无法正常游戏；服务端未支持异常保护，请服主更新").withStyle(net.minecraft.ChatFormatting.YELLOW),false);
         }
     }
 

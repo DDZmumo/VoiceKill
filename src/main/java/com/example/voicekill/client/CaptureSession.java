@@ -79,7 +79,7 @@ public final class CaptureSession {
     public Issue issue() {
         if(!isRunning())return Issue.MICROPHONE;
         Issue model=readiness.get();if(model!=Issue.READY)return model;
-        if(lastProgressNanos==0)return Issue.MICROPHONE;
+        if(lastProgressNanos==0)return Issue.UNKNOWN;
         return System.nanoTime()-lastProgressNanos>RecognitionHealth.FRAME_TIMEOUT_NANOS?Issue.STALLED:Issue.READY;
     }
 
