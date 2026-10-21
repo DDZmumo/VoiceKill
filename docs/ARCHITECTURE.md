@@ -1,6 +1,6 @@
 # 项目结构与运行机制
 
-依据 2026-10-21 的 1.0.15-dev.13 源码；历史交接资料来自 1.0.14。
+依据 2026-10-21 的 1.0.15-dev.14 源码；历史交接资料来自 1.0.14。
 实际修复和验证边界见 [修复与验收说明](FIXES_AND_VALIDATION.md)。
 
 ## 目录约定
@@ -172,4 +172,4 @@ Java 包名仍为 `com.example.voicekill`。网页是资源中的单文件 HTML/
 
 dev.13 的 `PhoneticMatcher` 先检查全部原词的精确命中，再检查别名/字母读音，最后以半全局加权编辑距离寻找中文读音片段；插入/删除音节为 1，常见口音权重较小。仅接受包含新事件文字的证据，历史最多 5 秒/64 字。`SpeechWindow.acceptFinal` 不拼接互斥候选或已撤回原文；同句高频/智能词也接受读音匹配，仍不跨事件拼接这些词。旧 `accept`/`ReviewMatcher` 仅保留作回归对照。详细规则与权衡见 [dev.13 验证](DEV13_VALIDATION.md)。
 
-`ModSettingsScreen/ClientSettings` 使用独立草稿和客户端字段白名单，本地游戏规则排至服务端线程，不覆盖远程服务器规则或新选设备。`SpeechHighlight` 只做字面颜色映射，`HudPlacement` 负责比例布局/边界；自有 actionbar Mixin 将 VoiceKill 换词提示交给 `HotbarHint` 换行。详细使用见 [dev.7 设置](DEV7_SETTINGS.md)。
+`ModSettingsScreen/ClientSettings` 使用独立草稿和客户端字段白名单，本地游戏规则排至服务端线程，不覆盖远程服务器规则或新选设备。`SpeechHighlight` 只做字面颜色映射，`HudPlacement` 负责比例布局/边界；自有 actionbar Mixin 将 VoiceKill 换词提示交给 `HotbarHint` 换行。`hudHotbarWidth` 只决定换行上限；背景和居中位置按当前页实际最宽文字（含页码）计算，两侧各留 6 像素。详细使用见 [dev.7 设置](DEV7_SETTINGS.md)。

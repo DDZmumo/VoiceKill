@@ -79,7 +79,7 @@ public final class ModSettingsScreen extends Screen {
             r.add(number("左上危险词每页行数",2,12,1,()->draft.hudWordLines,v->draft.hudWordLines=(int)v,""));
             r.add(number("面板背景不透明度",0,.85,.05,()->draft.hudPanelOpacity,v->draft.hudPanelOpacity=(float)v,""));
             r.add(toggle("物品栏上方提示自动换行",()->draft.hudHotbarHint,()->draft.hudHotbarHint=!draft.hudHotbarHint));
-            r.add(number("物品栏提示宽度",160,800,20,()->draft.hudHotbarWidth,v->draft.hudHotbarWidth=(int)v," px"));
+            r.add(number("物品栏提示最大宽度",160,800,20,()->draft.hudHotbarWidth,v->draft.hudHotbarWidth=(int)v," px"));
             r.add(number("物品栏提示保留时间",2,15,1,()->draft.hudHotbarSeconds,v->draft.hudHotbarSeconds=(float)v," 秒"));
             r.add(number("物品栏提示距底部",40,180,2,()->draft.hudHotbarBottom,v->draft.hudHotbarBottom=(int)v," px"));
         } else if(tab==3) {

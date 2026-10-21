@@ -104,9 +104,12 @@ public final class HudOverlay implements HudElement {
         if(age>Math.max(c.hudHotbarSeconds,pages*1.5))return;
         int page=Math.min(pages-1,(int)(age/1.5));
         List<FormattedCharSequence> lines=all.subList(page*count,Math.min(all.size(),(page+1)*count));
-        int height=lines.size()*10+8+(pages>1?10:0),x=(g.guiWidth()-width-12)/2,y=Math.max(6,g.guiHeight()-c.hudHotbarBottom-height);
-        g.fill(x,y,x+width+12,y+height,background(c));
+        int contentWidth=lines.stream().mapToInt(f::width).max().orElse(0);
+        String pageLabel=pages>1?(page+1)+" / "+pages:"";
+        contentWidth=Math.max(contentWidth,f.width(pageLabel));
+        int height=lines.size()*10+8+(pages>1?10:0),x=(g.guiWidth()-contentWidth-12)/2,y=Math.max(6,g.guiHeight()-c.hudHotbarBottom-height);
+        g.fill(x,y,x+contentWidth+12,y+height,background(c));
         for(int i=0;i<lines.size();i++)g.drawString(f,lines.get(i),x+6,y+4+i*10,WORD,true);
-        if(pages>1)g.drawString(f,(page+1)+" / "+pages,x+6,y+4+lines.size()*10,LABEL,false);
+        if(pages>1)g.drawString(f,pageLabel,x+6,y+4+lines.size()*10,LABEL,false);
     }
 }
