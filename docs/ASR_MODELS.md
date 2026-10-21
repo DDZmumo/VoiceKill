@@ -1,6 +1,6 @@
 # 识别模型、自然断句与回放
 
-当前为 dev.11。底层使用 sherpa-onnx 1.13.5 的小型双语 Zipformer INT8，CPU 默认单线程、beam 4。保留 dev.3 基础方案；新增 Silero VAD 边界、句末 SenseVoice INT8 音频复核与 CT Transformer 离线标点。
+当前为 dev.12。底层使用 sherpa-onnx 1.13.5 的小型双语 Zipformer INT8，CPU 默认单线程、beam 4。保留 dev.3 基础方案；新增 Silero VAD 边界、句末 SenseVoice INT8 音频复核与 CT Transformer 离线标点。
 
 ## 模型与缓存
 

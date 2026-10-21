@@ -1,6 +1,6 @@
 # 项目结构与运行机制
 
-依据 2026-10-21 的 1.0.15-dev.11 源码；历史交接资料来自 1.0.14。
+依据 2026-10-21 的 1.0.15-dev.12 源码；历史交接资料来自 1.0.14。
 实际修复和验证边界见 [修复与验收说明](FIXES_AND_VALIDATION.md)。
 
 ## 目录约定
@@ -63,7 +63,7 @@ Java 包名仍为 `com.example.voicekill`。网页是资源中的单文件 HTML/
 | `client/AudioDevices.java`、`client/MicScreen.java` | 设备枚举、分页选择、实时状态和错误显示 |
 | `client/HudOverlay.java` | 危险词、倒计时与死亡榜渲染 |
 | `web/WebConsole.java` | JDK HttpServer 和 JSON 操作接口 |
-| `mixin/` 下两个历史类 | 历史设备重定向方案；当前 Mixin JSON 没有注册它们；仅注册客户端 VoiceKillActionBarMixin 做自有提示换行 |
+| `mixin/` | 历史设备重定向类仍未注册；客户端注册 VoiceKillActionBarMixin 做自有提示换行，VoiceKillSilenceCameraMixin 仅取消存活角色最后一次静默伤害的镜头倾斜 |
 
 ## 语音与规则链路
 

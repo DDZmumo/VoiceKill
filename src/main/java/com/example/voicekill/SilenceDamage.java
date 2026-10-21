@@ -12,4 +12,5 @@ public final class SilenceDamage {
     private static final ResourceKey<DamageType> TYPE=ResourceKey.create(Registries.DAMAGE_TYPE,Identifier.fromNamespaceAndPath("voicekill","silence"));
     private SilenceDamage() {}
     public static DamageSource source(ServerPlayer player){return new DamageSource(player.registryAccess().lookupOrThrow(Registries.DAMAGE_TYPE).getOrThrow(TYPE));}
+    public static boolean hideHurtTilt(DamageSource source,boolean dying){return !dying&&source!=null&&source.is(TYPE);}
 }
