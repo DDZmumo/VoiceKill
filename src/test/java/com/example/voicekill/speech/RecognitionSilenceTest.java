@@ -39,7 +39,7 @@ class RecognitionSilenceTest {
     }
     @Test void invalidNumbersAreClampedAndOnlyActualCharactersCount() {
         var fallback=new RecognitionSilence.Rules(true,Float.NaN,Float.POSITIVE_INFINITY,Float.NaN);
-        assertEquals(30,fallback.timeoutSeconds());assertEquals(2,fallback.damageAmount());assertEquals(5,fallback.intervalSeconds());
+        assertEquals(20,fallback.timeoutSeconds());assertEquals(2,fallback.damageAmount());assertEquals(4,fallback.intervalSeconds());
         var bounds=new RecognitionSilence.Rules(true,-1,500,0);assertEquals(5,bounds.timeoutSeconds());assertEquals(20,bounds.damageAmount());assertEquals(.5f,bounds.intervalSeconds());
         assertFalse(RecognitionSilence.hasText(" ？！…"));assertFalse(RecognitionSilence.hasText(null));
         assertTrue(RecognitionSilence.hasText("我"));assertTrue(RecognitionSilence.hasText("Q A Q"));assertTrue(RecognitionSilence.hasText("123"));

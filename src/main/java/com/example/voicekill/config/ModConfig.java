@@ -65,14 +65,14 @@ public final class ModConfig {
     /** 把每句识别结果打到日志（排查「为什么没触发」时非常有用） */
     public boolean logSpeech = true;
     public boolean phoneticMatching = true;
-    public float phoneticThreshold = .35f;
+    public float phoneticThreshold = .30f;
     public com.example.voicekill.speech.PhoneticMatcher.Settings phoneticSettings(){return new com.example.voicekill.speech.PhoneticMatcher.Settings(phoneticMatching,phoneticThreshold);}
 
     /** Server-owned optional damage after no new recognized text; 2 health points = 1 heart. */
     public boolean silencePenaltyEnabled = false;
-    public float silenceTimeoutSeconds = 30f;
+    public float silenceTimeoutSeconds = 20f;
     public float silenceDamageAmount = 2f;
-    public float silenceDamageIntervalSeconds = 5f;
+    public float silenceDamageIntervalSeconds = 4f;
     public com.example.voicekill.speech.RecognitionSilence.Rules silenceRules(){return new com.example.voicekill.speech.RecognitionSilence.Rules(silencePenaltyEnabled,silenceTimeoutSeconds,silenceDamageAmount,silenceDamageIntervalSeconds);}
     public void applySilenceRules(com.example.voicekill.speech.RecognitionSilence.Rules rules){silencePenaltyEnabled=rules.enabled();silenceTimeoutSeconds=rules.timeoutSeconds();silenceDamageAmount=rules.damageAmount();silenceDamageIntervalSeconds=rules.intervalSeconds();}
 

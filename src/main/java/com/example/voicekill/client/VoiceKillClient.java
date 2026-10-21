@@ -86,6 +86,7 @@ public class VoiceKillClient implements ClientModInitializer {
     }
 
     private void tick() {
+        MicCapture.tickHealth();
         if(settingsKey!=null)while(settingsKey.consumeClick())Minecraft.getInstance().setScreen(new ModSettingsScreen(Minecraft.getInstance().screen));
         // 快捷键优先处理，不受模型准备流程影响
         if (micKey != null) {

@@ -8,8 +8,8 @@ import java.util.regex.Pattern;
 /** Target-directed pronunciation matching of the selected final sentence. No raw-text veto. */
 public final class PhoneticMatcher {
     public record Settings(boolean enabled,float threshold) {
-        public Settings {threshold=Float.isFinite(threshold)?Math.max(.05f,Math.min(.75f,threshold)):.35f;}
-        public static Settings defaults(){return new Settings(true,.35f);}
+        public Settings {threshold=Float.isFinite(threshold)?Math.max(.05f,Math.min(.75f,threshold)):.30f;}
+        public static Settings defaults(){return new Settings(true,.30f);}
     }
     private static final Pattern HAN=Pattern.compile("[\\u3400-\\u9fff]+");
     private PhoneticMatcher() {}

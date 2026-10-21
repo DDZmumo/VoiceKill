@@ -1,6 +1,6 @@
 # 识别模型、自然断句与回放
 
-当前为 dev.13。底层使用 sherpa-onnx 1.13.5 的小型双语 Zipformer INT8，CPU 默认单线程、beam 4。保留 dev.3 基础方案；新增 Silero VAD 边界、句末 SenseVoice INT8 音频复核与 CT Transformer 离线标点。
+当前为 dev.15。底层使用 sherpa-onnx 1.13.5 的小型双语 Zipformer INT8，CPU 默认单线程、beam 4。保留 dev.3 基础方案；新增 Silero VAD 边界、句末 SenseVoice INT8 音频复核与 CT Transformer 离线标点。
 
 ## 模型与缓存
 
@@ -42,7 +42,7 @@ PCM 每 40ms 送入 Silero 和同一个 Zipformer 流；实时假设仅显示。
 
 持续讲话约 10 秒兜底，另加声学检测、解码、客户端 tick 和网络耗时。词表变化不重置当前句或 watchdog，识别提示在下一识别流更新。客户端按讲话音频范围记录实际经历的词表编号，服务端按这些轮次由新到旧判定，不把等待复核时才出现的新词追溯加入。停止/重新开始、断线和切服仍丢弃旧段。空闲不消耗下一句话的完整预算。它按声学停顿决定边界，不能保证理解语法或所有换气都不拆句。标点恢复在结算之后，只影响展示。
 
-自然边界模型不可用时暂用原 Zipformer 流式端点，并在 F8/网页显示原因；关闭 `speechNaturalBoundary` 可主动用此路径。关闭句末复核/标点分别停用对应模型，不影响采音。
+自然边界模型不可用时准备备用流式端点，但暂停识别/判定与无识别扣血，并在 F8/网页及底部显示原因；关闭 `speechNaturalBoundary` 可主动用此路径。明确关闭句末复核/标点后，对应模型不纳入就绪要求；更改识别配置需重连。开启的模型准备中或运行异常时暂停识别，状态恢复重新等待。dev.15 客户端和服务端都要更新，原模型文件不变。
 
 ## 词表优先级和读音匹配
 
@@ -50,11 +50,11 @@ PCM 每 40ms 送入 Silero 和同一个 Zipformer 流；实时假设仅显示。
 
 服务端只使用最终选定句，已接受的复核不会因初识没命中而失效。精确/别名/字母读音后，统一计算中文音节距离，支持前后鼻音、h/f、l/n、平翘舌；所有词源包括单字使用同一规则。同分优先自定义词/人名及较完整词，跨轮仍按新组优先。
 
-`phoneticMatching: true`、`phoneticThreshold: 0.35` 为默认服务端设置，范围 0.05～0.75。模型权重和断句参数不变，不增加复核轮次；泛化匹配不改写模型输出。“菜/才”“刚/干”等同音/近音会产生额外触发，完整判定回放与边界见 [dev.13 验证](DEV13_VALIDATION.md)。下方各 dev 版本保留当时的历史策略及数字，不能当作当前规则。
+`phoneticMatching: true`、`phoneticThreshold: 0.30` 为默认服务端设置，范围 0.05～0.75。模型权重和断句参数不变，不增加复核轮次；泛化匹配不改写模型输出。“菜/才”“刚/干”等同音/近音会产生额外触发，完整判定回放与边界见 [dev.13 验证](DEV13_VALIDATION.md)。下方各 dev 版本保留当时的历史策略及数字，不能当作当前规则。
 
 ## 复现
 
-原 WAV 存在时不要重新生成。当前 NicknameReplay 默认使用最终句统一读音匹配（true/0.35），报告记录两字段；旧规则对照由 ReviewedReplayCheck 不传强度参数执行。Gradle `replayNicknames` 支持 `replayEngine=priority`、`replayMaxUtteranceSeconds=10`、`replayEndpointSilenceSeconds=0.6`，以及可选 `replayLexicon` JSON（text/source/aliases/preferred）。完整命令见 dev.7 验证文档。
+原 WAV 存在时不要重新生成。当前 NicknameReplay 默认使用最终句统一读音匹配（true/0.30），报告记录两字段；旧规则对照由 ReviewedReplayCheck 不传强度参数执行。Gradle `replayNicknames` 支持 `replayEngine=priority`、`replayMaxUtteranceSeconds=10`、`replayEndpointSilenceSeconds=0.6`，以及可选 `replayLexicon` JSON（text/source/aliases/preferred）。完整命令见 dev.7 验证文档。
 
 能力回放加速时采用输入音频时间推进 5 秒匹配历史，不将压缩墙钟当真实历史；延迟只看 `replayRealtime=true` 报告，排除模型初始化、Minecraft tick 和网络。Vosk 兼容模式显式按 UTF-8 读取 native JSON，避免 Windows 默认编码乱码。
 
@@ -103,7 +103,7 @@ dev.3 的 [同组音频复测](REPLAY_OPTIMIZATION.md) 中，`p老板` 与 `才`
 
 `src/main/resources/voicekill/asr/sensevoice-review-int8.json` 与 `punctuation-zh-en-int8.json` 固定资源版本、大小和 SHA256。标点文件从官方发布包核对后使用字节一致的固定 revision 镜像下载，官方包来源及哈希保留在清单中。两个模型均采用 Apache-2.0；不上传语音，不随 JAR 内嵌权重。`speechPostModelDir` 下需按清单 ID 建子目录；默认游戏缓存使用相同结构。
 
-关闭 `speechSentenceReview` 可禁用额外音频复核；关闭 `speechPunctuation` 可禁用标点，两项都关闭时回到 dev.4 基础链路。加载失败时继续基础识别，在控制台展示失败原因；修复缓存后重新连接麦克风可重试。
+关闭 `speechSentenceReview` 可禁用额外音频复核；关闭 `speechPunctuation` 可禁用标点，两项都关闭时回到 dev.4 基础链路。历史 dev.5 加载失败时曾继续基础识别；dev.15 改为暂停识别/无识别扣血，在控制台展示失败原因；修复缓存后重新连接麦克风可重试。
 
 ## dev.8 说明
 
@@ -126,3 +126,7 @@ dev.3 的 [同组音频复测](REPLAY_OPTIMIZATION.md) 中，`p老板` 与 `才`
 ## dev.13 最终句读音匹配
 
 语音模型及 104 条 WAV 未改；复用 dev.10 保存的原生识别事件重新经过当前服务端规则。正确命中为原组 17/21、逐字母 24/24、完整句 2/2、混合句 21/22；无已有正确命中丢失，新增 4 个同音/近音触发，保留混合组 1 个既有误触发。此结果只检验判定层，不是新模型推理、真人口音准确率或端到端延迟。见 [完整记录](DEV13_VALIDATION.md)。
+
+## dev.15 健康状态与同组复测
+
+启用模型未就绪、故障或采音/识别无进展时暂停识别与语音处罚，底部间歇提醒；正常静音不豁免无文字规则。客户端/服务端都要更新dev.15。默认读音强度0.30、等待20秒、伤害2点、间隔4秒，已有配置不强制迁移。相同104条WAV已重新跑原生链路，音频哈希及候选一致、既有正确命中无丢失，0.30移除混合组1个旧误触发，仍保留4个近音触发；加速回放不是实机延迟。详见 [dev.15 验证](DEV15_VALIDATION.md)。

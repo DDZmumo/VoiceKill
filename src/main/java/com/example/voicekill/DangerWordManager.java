@@ -61,6 +61,7 @@ public final class DangerWordManager {
     private String recognitionSession=java.util.UUID.randomUUID().toString();
     private String recognitionRound;
     private final com.example.voicekill.speech.RecognitionSilence recognitionSilence=new com.example.voicekill.speech.RecognitionSilence();
+    private final com.example.voicekill.speech.RecognitionHealth recognitionHealth=new com.example.voicekill.speech.RecognitionHealth();
     private long silenceTick;
 
     /** 是否已经 /voicekill start 开始游戏 */
@@ -147,7 +148,7 @@ public final class DangerWordManager {
     /** /voicekill start：清空本周期统计，重新组一组词，开始计时 */
     public void start(MinecraftServer server) {
         SpeechHandler.reset();recognitionSession=java.util.UUID.randomUUID().toString();
-        recognitionSilence.clear();silenceTick=0;
+        recognitionSilence.clear();recognitionHealth.reset(recognitionSession);silenceTick=0;
         this.running = true;
         this.nextWords = List.of();
         this.history.clear();
@@ -167,6 +168,7 @@ public final class DangerWordManager {
     public void stop(MinecraftServer server) {
         this.running = false;
         recognitionSilence.clear();
+        recognitionHealth.clear();
         SpeechHandler.reset();
         this.ticksElapsed = 0;
         VoiceKillMod.LOGGER.info("[VoiceKill] 游戏已停止（/voicekill start 重新开始）");
@@ -175,19 +177,31 @@ public final class DangerWordManager {
 
     private static boolean silenceEligible(ServerPlayer player){return player!=null&&!player.hasDisconnected()&&!player.isDeadOrDying()&&!player.isCreative()&&!player.isSpectator();}
     private void resetRecognition(ServerPlayer player) {
-        if(!running||!silenceEligible(player))return;
+        if(!running||!silenceEligible(player)||!canRecognize(player))return;
         recognitionSilence.configure(config.silenceRules());
         recognitionSilence.recognized(player.getUUID().toString(),silenceTick);
     }
     /** A partial-text activity notice is deliberately separate from danger-word judging. */
-    public void recordRecognition(ServerPlayer player,String session){if(recognitionSession.equals(session))resetRecognition(player);}
+    public void recordRecognition(ServerPlayer player,String session){var server=player.level().getServer();if(server==null)return;if(!server.isSameThread()){server.execute(()->recordRecognition(player,session));return;}if(recognitionSession.equals(session))resetRecognition(player);}
     public void recordRecognizedText(ServerPlayer player,String text){if(com.example.voicekill.speech.RecognitionSilence.hasText(text))resetRecognition(player);}
-    public void forgetRecognition(ServerPlayer player){recognitionSilence.forget(player.getUUID().toString());}
+    public boolean canRecognize(ServerPlayer player){return player==null||recognitionHealth.ready(player.getUUID().toString(),silenceTick);}
+    public void recordRecognitionHealth(ServerPlayer player,String session,com.example.voicekill.speech.RecognitionHealth.Issue issue) {
+        var server=player.level().getServer();if(server==null)return;
+        if(!server.isSameThread()){server.execute(()->recordRecognitionHealth(player,session,issue));return;}
+        if(!running||player.hasDisconnected())return;
+        String id=player.getUUID().toString();boolean wasReady=recognitionHealth.ready(id,silenceTick);
+        if(!recognitionHealth.report(id,session,issue,silenceTick))return;
+        if(!wasReady||issue!=com.example.voicekill.speech.RecognitionHealth.Issue.READY){recognitionSilence.forget(id);SpeechHandler.forget(player);}
+    }
+    public void forgetRecognition(ServerPlayer player){String id=player.getUUID().toString();recognitionSilence.forget(id);recognitionHealth.forget(id);}
     private void tickRecognitionSilence(MinecraftServer server) {
         recognitionSilence.configure(config.silenceRules());silenceTick++;
-        if(!recognitionSilence.rules().enabled())return;
         for(ServerPlayer player:server.getPlayerList().getPlayers()) {
-            if(!recognitionSilence.step(player.getUUID().toString(),silenceTick,silenceEligible(player)))continue;
+            String id=player.getUUID().toString();boolean ready=canRecognize(player);
+            if(!ready)SpeechHandler.forget(player);
+            if(!player.isDeadOrDying()&&recognitionHealth.noticeDue(id,silenceTick))
+                player.displayClientMessage(Component.literal("[VoiceKill] "+recognitionHealth.issue(id,silenceTick).warning()).withStyle(ChatFormatting.YELLOW),true);
+            if(!recognitionSilence.step(id,silenceTick,silenceEligible(player)&&ready))continue;
             float amount=recognitionSilence.rules().damageAmount();
             if(player.hurtServer(player.level(),SilenceDamage.source(player),amount)) {
                 player.displayClientMessage(Component.literal("[VoiceKill] 未识别到新文字，扣除 "+amount+" 点生命").withStyle(ChatFormatting.RED),true);

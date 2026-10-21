@@ -4,6 +4,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
+import com.example.voicekill.speech.RecognitionHealth;
+import com.example.voicekill.speech.RecognitionHealth.Issue;
 
 /** 单次录音会话独占输入和识别器；可用合成输入测试退出、重复语句和清理。 */
 public final class CaptureSession {
@@ -16,6 +19,7 @@ public final class CaptureSession {
     }
     public interface Decoder extends AutoCloseable {
         List<String> accept(byte[] bytes) throws Exception;
+        default Issue issue(){return Issue.READY;}
         default Boundary boundary() { return Boundary.NONE; }
         default long epoch() { return 0; }
         default void discard() throws Exception {}
@@ -41,6 +45,8 @@ public final class CaptureSession {
     private volatile String error = "";
     private volatile double level;
     private volatile long chunks;
+    private volatile long lastProgressNanos;
+    private final Supplier<Issue> readiness;
 
     public CaptureSession(Source source, Decoder decoder, Consumer<List<String>> sink) {
         this(source, decoder, sink, ignored -> {});
@@ -51,11 +57,15 @@ public final class CaptureSession {
     }
 
     public CaptureSession(Source source, Decoder decoder, Consumer<List<String>> sink, Consumer<String> onFailure,Consumer<Transcript> progress) {
+        this(source,decoder,sink,onFailure,progress,decoder::issue);
+    }
+    public CaptureSession(Source source, Decoder decoder, Consumer<List<String>> sink, Consumer<String> onFailure,Consumer<Transcript> progress,Supplier<Issue> readiness) {
         this.source = source;
         this.decoder = decoder;
         this.sink = sink;
         this.onFailure = onFailure;
         this.progress = progress;
+        this.readiness=readiness;
         thread = new Thread(this::loop, "VoiceKill-MicCapture");
         thread.setDaemon(true);
     }
@@ -66,6 +76,12 @@ public final class CaptureSession {
     public String error() { return error; }
     public double level() { return level; }
     public long chunks() { return chunks; }
+    public Issue issue() {
+        if(!isRunning())return Issue.MICROPHONE;
+        Issue model=readiness.get();if(model!=Issue.READY)return model;
+        if(lastProgressNanos==0)return Issue.MICROPHONE;
+        return System.nanoTime()-lastProgressNanos>RecognitionHealth.FRAME_TIMEOUT_NANOS?Issue.STALLED:Issue.READY;
+    }
 
     public boolean stop() {
         stopping = true;
@@ -84,10 +100,17 @@ public final class CaptureSession {
     private void loop() {
         try {
             byte[] buffer = new byte[FRAME_BYTES];
+            boolean paused=false;
             while (!stopping) {
                 int count = source.read(buffer);
                 if (count < 0) break;
                 if (count == 0) continue;
+                long now=System.nanoTime();
+                if(readiness.get()!=Issue.READY) {
+                    if(!paused){decoder.discard();paused=true;}
+                    lastProgressNanos=now;progress.accept(new Transcript("",true));continue;
+                }
+                if(paused||(lastProgressNanos!=0&&now-lastProgressNanos>RecognitionHealth.FRAME_TIMEOUT_NANOS)){decoder.discard();paused=false;}
                 chunks++;
                 long energy = 0;
                 for (int i = 0; i + 1 < count; i += 2) {
@@ -96,6 +119,10 @@ public final class CaptureSession {
                 }
                 level = Math.min(1, Math.sqrt((double) energy / Math.max(1, count / 2)) / 32768);
                 List<String> candidates = decoder.accept(Arrays.copyOf(buffer, count));
+                lastProgressNanos=System.nanoTime();
+                if(readiness.get()!=Issue.READY||lastProgressNanos-now>RecognitionHealth.FRAME_TIMEOUT_NANOS) {
+                    decoder.discard();paused=true;progress.accept(new Transcript("",true));continue;
+                }
                 // 不按文字去重：两个连续相同的端点结果可以是两个真实音节/语句。
                 if (!stopping) {
                     if (!candidates.isEmpty()) {

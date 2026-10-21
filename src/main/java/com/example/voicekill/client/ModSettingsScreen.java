@@ -75,7 +75,7 @@ public final class ModSettingsScreen extends Screen {
             r.add(toggle("左上实时转写（危险词粉红）",()->draft.hudTranscript,()->draft.hudTranscript=!draft.hudTranscript));
             r.add(number("转写保留时间",2,15,1,()->draft.hudTranscriptSeconds,v->draft.hudTranscriptSeconds=(float)v," 秒"));
             r.add(number("转写最多行数",1,6,1,()->draft.hudTranscriptLines,v->draft.hudTranscriptLines=(int)v,""));
-            r.add(number("左上危险词宽度",120,600,10,()->draft.hudWordWidth,v->draft.hudWordWidth=(int)v," px"));
+            r.add(number("左上危险词最大宽度",120,600,10,()->draft.hudWordWidth,v->draft.hudWordWidth=(int)v," px"));
             r.add(number("左上危险词每页行数",2,12,1,()->draft.hudWordLines,v->draft.hudWordLines=(int)v,""));
             r.add(number("面板背景不透明度",0,.85,.05,()->draft.hudPanelOpacity,v->draft.hudPanelOpacity=(float)v,""));
             r.add(toggle("物品栏上方提示自动换行",()->draft.hudHotbarHint,()->draft.hudHotbarHint=!draft.hudHotbarHint));

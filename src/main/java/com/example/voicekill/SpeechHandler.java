@@ -72,6 +72,7 @@ public final class SpeechHandler {
             if (player.hasDisconnected() || player.isDeadOrDying()) return;
         }
         if (!manager.isRunning()) return;
+        if(!manager.canRecognize(player))return;
         var packet = com.example.voicekill.speech.SpeechPacket.parse(rawPacketText);
         if (packet.candidates().isEmpty()) return;
         String rawText = packet.candidates().getFirst();

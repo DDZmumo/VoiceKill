@@ -44,6 +44,7 @@ public final class RoundTrackingDecoder implements CaptureSession.Decoder {
     private Context at(long sample){Context found=null;for(var mark:timeline){if(mark.sample()>sample)break;found=mark.context();}return found;}
     @Override public void discard() throws Exception {base.discard();timeline.clear();samples=0;energyStart=-1;rounds=null;epoch++;}
     @Override public long epoch(){return epoch;}
+    @Override public com.example.voicekill.speech.RecognitionHealth.Issue issue(){return base.issue();}
     @Override public RoundSpan rounds(){return rounds;}
     @Override public CaptureSession.Boundary boundary(){return base.boundary();}
     @Override public float[] utteranceSamples(){return base.utteranceSamples();}

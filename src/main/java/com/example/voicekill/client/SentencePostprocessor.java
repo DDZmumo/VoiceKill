@@ -19,6 +19,8 @@ public final class SentencePostprocessor implements AutoCloseable {
     private Reviewer reviewer;
     private Punctuator punctuator;
     private boolean closed;
+    private volatile boolean failed;
+    public boolean failed(){return failed;}
     private volatile Snapshot snapshot=new Snapshot("","","",false,"waiting",0,0,"",0);
     public SentencePostprocessor(Reviewer reviewer,Punctuator punctuator) {this.reviewer=reviewer;this.punctuator=punctuator;}
     public Snapshot snapshot() {return snapshot;}
@@ -43,6 +45,7 @@ public final class SentencePostprocessor implements AutoCloseable {
                     }
                 } else reason="no-audio";
             } catch(Exception|LinkageError failure) {
+                failed=true;
                 error=CaptureSession.rootCause(failure);reason="review-failed";
                 try {reviewer.close();} catch(RuntimeException ignored) {} reviewer=null;
             }
@@ -58,6 +61,7 @@ public final class SentencePostprocessor implements AutoCloseable {
                 if(!proposed.isEmpty()&&sameContent(display,proposed))punctuated=proposed;
                 else error=error.isEmpty()?"标点结果改变正文，已保留原文":error;
             } catch(Exception|LinkageError failure) {
+                failed=true;
                 error=CaptureSession.rootCause(failure);
                 try {punctuator.close();} catch(RuntimeException ignored) {} punctuator=null;
             }

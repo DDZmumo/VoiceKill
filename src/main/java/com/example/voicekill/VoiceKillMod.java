@@ -45,6 +45,9 @@ public class VoiceKillMod implements ModInitializer {
         PayloadTypeRegistry.playC2S().register(com.example.voicekill.network.RecognitionActivityPayload.TYPE,com.example.voicekill.network.RecognitionActivityPayload.CODEC);
         net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.registerGlobalReceiver(com.example.voicekill.network.RecognitionActivityPayload.TYPE,
                 (payload,context)->dangerWordManager.recordRecognition(context.player(),payload.session()));
+        PayloadTypeRegistry.playC2S().register(com.example.voicekill.network.RecognitionHealthPayload.TYPE,com.example.voicekill.network.RecognitionHealthPayload.CODEC);
+        net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.registerGlobalReceiver(com.example.voicekill.network.RecognitionHealthPayload.TYPE,
+                (payload,context)->dangerWordManager.recordRecognitionHealth(context.player(),payload.session(),payload.issue()));
 
         // /voicekill start | stop | status（别名 /vk）
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->

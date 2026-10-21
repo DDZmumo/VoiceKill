@@ -39,37 +39,45 @@ public final class HudOverlay implements HudElement {
     private void draw(GuiGraphics g,ModConfig c,State s,SpeechTranscript.View speech,HotbarHint.View hint) {
         Font font=Minecraft.getInstance().font;
         int wordWidth=Math.max(60,Math.min(c.hudWordWidth,g.guiWidth()/2-12));
-        int bottom=drawWords(g,font,c,s,wordWidth);
-        int speechBottom=drawSpeech(g,font,c,s.running?s.words:List.of(),speech,6,bottom+4,wordWidth);
+        var wordPanel=drawWords(g,font,c,s,wordWidth);
+        int bottom=wordPanel.y()+wordPanel.height();
+        var speechPanel=drawSpeech(g,font,c,s.running?s.words:List.of(),speech,6,bottom+4,wordWidth);
         if(s.running)drawTimer(g,font,c,s.remaining);
-        if(c.hudShowBoard)drawBoard(g,font,c,s,wordWidth+16,Math.max(bottom,speechBottom));
+        if(c.hudShowBoard)drawBoard(g,font,c,s,Math.max(wordPanel.x()+wordPanel.width(),speechPanel.x()+speechPanel.width()),Math.max(bottom,speechPanel.y()+speechPanel.height()));
         if(c.hudHotbarHint)drawHotbar(g,font,c,hint);
     }
-    private int drawWords(GuiGraphics g,Font f,ModConfig c,State s,int maxWidth) {
-        if(!s.running){g.fill(6,6,Math.min(g.guiWidth()-6,190),24,background(c));g.drawString(f,"未开始 · /vk start",10,11,ACCENT,false);return 24;}
+    private HudPlacement.Rect drawWords(GuiGraphics g,Font f,ModConfig c,State s,int maxWidth) {
+        if(!s.running){String text="未开始 · /vk start";int width=f.width(text)+10;g.fill(6,6,6+width,24,background(c));g.drawString(f,text,10,11,ACCENT,false);return new HudPlacement.Rect(6,6,width,18);}
         var all=f.split(Component.literal(String.join(" · ",s.words)),maxWidth);
-        if(all.isEmpty())return 6;
+        if(all.isEmpty())return new HudPlacement.Rect(6,6,0,0);
         int count=Math.min(c.hudWordLines,Math.max(1,(g.guiHeight()/2-30)/10));
         int pages=(all.size()+count-1)/count;
         int page=pages<=1?0:(int)(((System.nanoTime()-s.changed)/2_000_000_000L)%pages);
         var lines=all.subList(page*count,Math.min(all.size(),(page+1)*count));
         int panelHeight=14+lines.size()*10;
-        g.fill(6,6,6+maxWidth+10,6+panelHeight,background(c));
-        g.drawString(f,"本轮危险词"+(pages>1?" "+(page+1)+"/"+pages:""),10,8,LABEL,false);
+        String title="本轮危险词"+(pages>1?" "+(page+1)+"/"+pages:"");
+        int panelWidth=contentWidth(f,lines,title)+10;
+        g.fill(6,6,6+panelWidth,6+panelHeight,background(c));
+        g.drawString(f,title,10,8,LABEL,false);
         for(int i=0;i<lines.size();i++)g.drawString(f,lines.get(i),10,19+i*10,WORD,true);
-        return 6+panelHeight;
+        return new HudPlacement.Rect(6,6,panelWidth,panelHeight);
     }
-    private int drawSpeech(GuiGraphics g,Font f,ModConfig c,List<String> words,SpeechTranscript.View speech,int x,int y,int width) {
-        if(!c.hudTranscript||speech.text().isEmpty()||System.nanoTime()-speech.updatedNanos()>c.hudTranscriptSeconds*1e9)return y;
+    private HudPlacement.Rect drawSpeech(GuiGraphics g,Font f,ModConfig c,List<String> words,SpeechTranscript.View speech,int x,int y,int width) {
+        if(!c.hudTranscript||speech.text().isEmpty()||System.nanoTime()-speech.updatedNanos()>c.hudTranscriptSeconds*1e9)return new HudPlacement.Rect(x,y,0,0);
         MutableComponent component=Component.empty();
         for(var run:SpeechHighlight.runs(speech.text(),words))component.append(Component.literal(run.text()).withStyle(style->style.withColor(run.danger()?PINK:0xE6EDF3)));
         var all=f.split(component,width);int room=Math.max(0,(g.guiHeight()-y-26)/10);
-        int count=Math.min(Math.min(c.hudTranscriptLines,room),all.size());if(count<1)return y;
+        int count=Math.min(Math.min(c.hudTranscriptLines,room),all.size());if(count<1)return new HudPlacement.Rect(x,y,0,0);
         int from=all.size()-count;
-        g.fill(x,y,x+width+10,y+14+count*10,background(c));
-        g.drawString(f,speech.interim()?"你说的话 · 识别中":"你说的话",x+4,y+2,LABEL,false);
+        String title=speech.interim()?"你说的话 · 识别中":"你说的话";
+        int panelWidth=contentWidth(f,all.subList(from,all.size()),title)+10;
+        g.fill(x,y,x+panelWidth,y+14+count*10,background(c));
+        g.drawString(f,title,x+4,y+2,LABEL,false);
         for(int i=0;i<count;i++)g.drawString(f,all.get(from+i),x+4,y+13+i*10,TEXT,false);
-        return y+14+count*10;
+        return new HudPlacement.Rect(x,y,panelWidth,14+count*10);
+    }
+    private static int contentWidth(Font font,List<FormattedCharSequence> lines,String title) {
+        return Math.max(font.width(title),lines.stream().mapToInt(font::width).max().orElse(0));
     }
     private void drawTimer(GuiGraphics g,Font f,ModConfig c,int remaining) {
         String text=remaining+"s 后换词";int right=g.guiWidth()-6,left=right-f.width(text)-12;
@@ -104,9 +112,8 @@ public final class HudOverlay implements HudElement {
         if(age>Math.max(c.hudHotbarSeconds,pages*1.5))return;
         int page=Math.min(pages-1,(int)(age/1.5));
         List<FormattedCharSequence> lines=all.subList(page*count,Math.min(all.size(),(page+1)*count));
-        int contentWidth=lines.stream().mapToInt(f::width).max().orElse(0);
         String pageLabel=pages>1?(page+1)+" / "+pages:"";
-        contentWidth=Math.max(contentWidth,f.width(pageLabel));
+        int contentWidth=contentWidth(f,lines,pageLabel);
         int height=lines.size()*10+8+(pages>1?10:0),x=(g.guiWidth()-contentWidth-12)/2,y=Math.max(6,g.guiHeight()-c.hudHotbarBottom-height);
         g.fill(x,y,x+contentWidth+12,y+height,background(c));
         for(int i=0;i<lines.size();i++)g.drawString(f,lines.get(i),x+6,y+4+i*10,WORD,true);

@@ -36,6 +36,8 @@ class PhoneticMatcherTest {
         assertNull(PhoneticMatcher.find(words("镐子"),"how much the shirt is",PhoneticMatcher.Settings.defaults()));
     }
     @Test void sensitivityAndSwitchAreRealControlsRatherThanHiddenSafetyExceptions() {
+        assertEquals(.30f,PhoneticMatcher.Settings.defaults().threshold());
+        assertEquals(.30f,new PhoneticMatcher.Settings(true,Float.NaN).threshold());
         assertNull(PhoneticMatcher.find(words("镐子"),"老子",new PhoneticMatcher.Settings(true,.05f)));
         assertNotNull(PhoneticMatcher.find(words("镐子"),"老子",new PhoneticMatcher.Settings(true,.35f)));
         assertNull(PhoneticMatcher.find(words("镐子"),"稿子",new PhoneticMatcher.Settings(false,.35f)));

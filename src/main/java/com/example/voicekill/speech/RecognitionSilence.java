@@ -7,9 +7,9 @@ import java.util.Map;
 public final class RecognitionSilence {
     public record Rules(boolean enabled,float timeoutSeconds,float damageAmount,float intervalSeconds) {
         public Rules {
-            timeoutSeconds=clamp(timeoutSeconds,5,600,30);
+            timeoutSeconds=clamp(timeoutSeconds,5,600,20);
             damageAmount=clamp(damageAmount,.5f,20,2);
-            intervalSeconds=clamp(intervalSeconds,.5f,60,5);
+            intervalSeconds=clamp(intervalSeconds,.5f,60,4);
         }
         private static float clamp(float value,float min,float max,float fallback){return Float.isFinite(value)?Math.max(min,Math.min(max,value)):fallback;}
         public long timeoutTicks(){return Math.round(timeoutSeconds*20);}
@@ -17,7 +17,7 @@ public final class RecognitionSilence {
     }
     private static final class State {long nextDamage;State(long next){nextDamage=next;}}
     private final Map<String,State> players=new HashMap<>();
-    private Rules rules=new Rules(false,30,2,5);
+    private Rules rules=new Rules(false,20,2,4);
     public static boolean hasText(String text){return text!=null&&text.codePoints().anyMatch(Character::isLetterOrDigit);}
     public void configure(Rules next){if(!rules.equals(next)){rules=next;clear();}}
     public Rules rules(){return rules;}

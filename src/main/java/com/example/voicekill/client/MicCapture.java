@@ -16,6 +16,9 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import com.example.voicekill.speech.RecognitionHealth.Issue;
+import com.example.voicekill.network.RecognitionHealthPayload;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 
 /** 录音/识别的唯一所有者；Shriek 仅提供模型准备和文本网络通道。 */
 public final class MicCapture {
@@ -28,6 +31,10 @@ public final class MicCapture {
     private static volatile String note = "";
     private static volatile String currentDevice = "";
     private static volatile String inputFormat = "";
+    private static volatile Issue modelIssue=Issue.READY;
+    private static String healthSession="";
+    private static Issue sentIssue;
+    private static long healthSentAt,localNoticeAt;
     private static volatile long generation;
     private static volatile boolean attempted;
     private static volatile List<String> recognitionWords = List.of();
@@ -51,7 +58,7 @@ public final class MicCapture {
         updateRecognitionVocabulary(payload.words(),payload.preferred());
         roundContext=new RoundTrackingDecoder.Context(payload.session(),payload.round(),payload.running());
     }
-    public static void disconnected(){roundContext=RoundTrackingDecoder.Context.empty();recognitionWords=List.of();recognitionVocabulary=List.of();SpeechTranscript.clear();}
+    public static void disconnected(){roundContext=RoundTrackingDecoder.Context.empty();recognitionWords=List.of();recognitionVocabulary=List.of();healthSession="";sentIssue=null;SpeechTranscript.clear();}
     private static String hints() {
         var vocabulary=recognitionVocabulary;
         return vocabulary.isEmpty()?RecognitionHints.encode(recognitionWords):RecognitionHints.encodePriority(vocabulary);
@@ -64,11 +71,34 @@ public final class MicCapture {
 
     public static String state() { var active = session; return active == null ? state : active.state(); }
     public static String error() { var active = session; return active == null ? lastError : active.error(); }
+    public static Issue issue() {
+        if(modelIssue!=Issue.READY)return modelIssue;
+        var active=session;
+        if(active!=null)return active.issue();
+        return "model".equals(state)||"starting".equals(state)?Issue.MODEL_LOADING:Issue.MICROPHONE;
+    }
+    /** Main-thread heartbeat. Ready status never refreshes the no-speech deadline. */
+    public static void tickHealth() {
+        var client=Minecraft.getInstance();var context=roundContext;
+        if(client.getConnection()==null||!context.running()||context.session().isEmpty()){healthSession="";sentIssue=null;return;}
+        long now=System.nanoTime();Issue issue=issue();
+        if(issue!=Issue.READY)SpeechTranscript.clear();
+        if(ClientPlayNetworking.canSend(RecognitionHealthPayload.TYPE)) {
+            if(!context.session().equals(healthSession)||issue!=sentIssue||now-healthSentAt>=1_000_000_000L) {
+                ClientPlayNetworking.send(new RecognitionHealthPayload(context.session(),issue));
+                healthSession=context.session();sentIssue=issue;healthSentAt=now;
+            }
+        } else if(issue!=Issue.READY&&(localNoticeAt==0||now-localNoticeAt>=10_000_000_000L)) {
+            client.gui.setOverlayMessage(net.minecraft.network.chat.Component.literal("[VoiceKill] 麦克风或模型可能出现问题，可能无法正常游戏；服务端未支持异常保护，请服主更新").withStyle(net.minecraft.ChatFormatting.YELLOW),false);
+            localNoticeAt=now;
+        }
+    }
 
     public static Map<String, Object> snapshot() {
         Map<String, Object> map = new LinkedHashMap<>();
         var active = session;
         map.put("state", state()); map.put("error", error());
+        map.put("health",issue().name());
         map.put("engine", activeEngine); map.put("note", note);
         map.put("device", currentDevice); map.put("format", inputFormat);
         map.put("level", active == null ? 0 : active.level());
@@ -83,7 +113,7 @@ public final class MicCapture {
     public static synchronized boolean start(String device) {
         attempted = true;
         if (!stop()) return false;
-        state = "starting"; lastError = ""; note = "";
+        state = "starting"; lastError = ""; note = "";modelIssue=Issue.READY;
         AudioCapture source = null;
         CaptureSession.Decoder decoder = null;
         try {
@@ -102,16 +132,19 @@ public final class MicCapture {
             final CaptureSession.Decoder activeDecoder = decoder;
             final RecognitionActivity recognitionActivity=new RecognitionActivity();
             session = new CaptureSession(source, decoder, candidates -> {
+                long capturedAt=System.nanoTime();
                 String packet = SpeechPacket.encode(candidates, activeDecoder.literalCandidates(),activeDecoder.reviewConfirmed(),activeDecoder.rounds());
                 if (config.logSpeech && activeDecoder instanceof EnhancedDecoder post)
                     VoiceKillMod.LOGGER.info("[VoiceKill] 句末处理：{}", post.snapshot());
                 Minecraft client = Minecraft.getInstance();
                 client.execute(() -> {
-                    if (generation == token && client.getConnection() != null) {
+                    if (generation == token && client.getConnection() != null&&issue()==Issue.READY&&System.nanoTime()-capturedAt<=com.example.voicekill.speech.RecognitionHealth.FRAME_TIMEOUT_NANOS) {
+                        tickHealth();
                         ShriekPackets.sendToServer(new PlayerSpeakPacket(packet));
                     }
                 });
             }, failure -> VoiceKillMod.LOGGER.error("[VoiceKill] 录音会话中断：{}", failure), transcript->{
+                if(generation!=token)return;
                 SpeechTranscript.update(transcript);
                 var context=roundContext;
                 if(context.running()&&!context.session().isEmpty()&&recognitionActivity.observe(context.session(),transcript.text(),transcript.interim(),System.nanoTime()/1_000_000)) {
@@ -121,7 +154,7 @@ public final class MicCapture {
                             net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(new com.example.voicekill.network.RecognitionActivityPayload(context.session()));
                     });
                 }
-            });
+            },()->modelIssue!=Issue.READY?modelIssue:activeDecoder.issue());
             session.start();
             VoiceKillMod.LOGGER.info("[VoiceKill] 录音已启动：{}，{} → 16kHz mono；识别引擎={}", currentDevice, inputFormat, activeEngine);
             return true;
@@ -130,6 +163,7 @@ public final class MicCapture {
                 try { source.close(); } catch (Throwable cleanup) { failure.addSuppressed(cleanup); }
             }
             if (decoder != null) decoder.close();
+            if("model".equals(state))modelIssue=Issue.MODEL_FAILED;
             session = null; state = "failed";
             lastError = CaptureSession.rootCause(failure);
             VoiceKillMod.LOGGER.error("[VoiceKill] 录音启动失败（{} / {} / {}）：{}",
@@ -158,7 +192,8 @@ public final class MicCapture {
                         activeEngine="Zipformer 中英双语 · 声学自然断句";
                         return natural;
                     } catch(Exception|LinkageError failure) {
-                        note="自然断句模型不可用，暂用流式端点："+CaptureSession.rootCause(failure);
+                        note="自然断句模型不可用，识别与无识别扣血已暂停："+CaptureSession.rootCause(failure);
+                        modelIssue=Issue.MODEL_FAILED;
                         VoiceKillMod.LOGGER.warn("[VoiceKill] {}",note);
                     }
                 }
@@ -167,7 +202,8 @@ public final class MicCapture {
                 return decoder;
             } catch (Exception | LinkageError failure) {
                 if (!config.allowVoskFallback) throw failure;
-                note = "双语引擎不可用，已回退 Vosk：" + CaptureSession.rootCause(failure);
+                note = "双语引擎不可用，备用引擎已准备但识别与无识别扣血暂停：" + CaptureSession.rootCause(failure);
+                modelIssue=Issue.MODEL_FAILED;
                 VoiceKillMod.LOGGER.warn("[VoiceKill] {}", note, failure);
             }
         }
@@ -201,7 +237,7 @@ public final class MicCapture {
             } catch (Exception | LinkageError failure) {
                 if (reviewer != null) reviewer.close();
                 if (punctuator != null) punctuator.close();
-                VoiceKillMod.LOGGER.warn("[VoiceKill] 句末模型不可用，继续基础识别", failure);
+                VoiceKillMod.LOGGER.warn("[VoiceKill] 句末模型不可用，识别与无识别扣血暂停", failure);
                 throw failure;
             }
         }, config.speechMaxUtteranceSeconds);

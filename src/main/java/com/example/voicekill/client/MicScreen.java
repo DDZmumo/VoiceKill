@@ -137,6 +137,7 @@ public class MicScreen extends Screen {
             case "failed" -> "连接失败：" + MicCapture.error();
             default -> "录音已停止 · 选择设备可重新连接";
         };
+        if(MicCapture.isRunning()&&MicCapture.issue()!=com.example.voicekill.speech.RecognitionHealth.Issue.READY)status=MicCapture.issue().warning();
         String shown = status;
         while (!shown.isEmpty() && font.width(shown + "…") > this.width - 24) {
             shown = shown.substring(0, shown.length() - 1);
